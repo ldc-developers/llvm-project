@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "../assembly.h"
+#include "safeseh.h"
 
 // du_int __udivdi3(du_int a, du_int b);
 
@@ -20,6 +21,7 @@
 #ifdef __i386__
 
 .text
+WIN32_SAFE_SEH_HEADER
 .balign 4
 DEFINE_COMPILERRT_FUNCTION(__udivdi3)
 

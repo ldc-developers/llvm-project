@@ -258,7 +258,7 @@ if (NOT MSVC)
   )
 endif ()
 
-if (NOT MSVC)
+if (NOT CMAKE_ASM_COMPILER_ID MATCHES "MSVC")
   set(x86_64_SOURCES
     ${GENERIC_SOURCES}
     ${GENERIC_TF_SOURCES}
@@ -308,7 +308,7 @@ if (NOT MSVC)
       i386/chkstk2.S
     )
   endif()
-else () # MSVC
+else () # MSVC assembler
   # Use C versions of functions when building on MSVC
   # MSVC's assembler takes Intel syntax, not AT&T syntax.
   # Also use only MSVC compilable builtin implementations.
@@ -320,7 +320,13 @@ else () # MSVC
     x86_64/floatdixf.c
   )
   set(i386_SOURCES ${GENERIC_SOURCES} ${x86_ARCH_SOURCES})
-endif () # if (NOT MSVC)
+endif ()
+
+if (MSVC)
+  set_source_files_properties(
+    ${x86_64_SOURCES} ${i386_SOURCES}
+    PROPERTIES COMPILE_FLAGS "/GS- /Zl")
+endif()
 
 set(arm_SOURCES
   arm/fp_mode.c

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "../assembly.h"
+#include "safeseh.h"
 
 // float __floatdisf(di_int a);
 
@@ -16,6 +17,7 @@
 #ifdef __i386__
 
 .text
+WIN32_SAFE_SEH_HEADER
 .balign 4
 DEFINE_COMPILERRT_FUNCTION(__floatdisf)
 #ifndef TRUST_CALLERS_USE_64_BIT_STORES
