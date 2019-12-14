@@ -1,0 +1,92 @@
+language: c
+
+compiler:
+  - gcc
+
+runtime:
+  nodePool: shippable_shared_aarch64
+
+# git clone depth
+depth: 50
+
+env:
+  global:
+    - secure: OuhkRMNLWCzMcJdPrUtvyo78/NqOtP1WHEfVViD5oCHIFr7rTjOTRFC+1Tcal//Z9XoqlGTBSfthqn6Z8QemqdljeVSXJgb9zXJMrq4Hl/hWrNhJ/M1m/rh30EQYnAzFyiTGN9yuzOLArLDq1Emv2dzDRpZybrx6FpSvo+hm3GQZNW55+KUu5uUoCsKZwSIjytgJPuec/sTOkV81OP2bszwqmvh+Xhb1UT4ukYlDKK3B+uggKc7MCnOWiYBkh5fsNmEjUiBS3tj4B2nD4rTv0isDucZJTe5aHbOFhjRi5Yh4yk4qxi4WqwOHYDTIU4rzEOuOKihVeo52IayuJE+4Iw==
+  matrix:
+    - LLVM_ENABLE_ASSERTIONS=ON
+    - LLVM_ENABLE_ASSERTIONS=OFF
+
+build:
+  ci:
+    # Install prerequisites
+    - export DEBIAN_FRONTEND=noninteractive
+    - apt-get -q update
+    - apt-get -yq install cmake curl git-core ninja-build p7zip-full binutils-dev
+    - update-alternatives --install /usr/bin/ld ld /usr/bin/ld.gold 99
+    # Build & install LLVM incl. LLD, compiler-rt and the Khronos SPIRV-LLVM-Translator
+    - cmake --version
+    - ninja --version
+    - mkdir build
+    - cd build
+    - |
+      cmake -G Ninja ../llvm \
+        -DLLVM_ENABLE_PROJECTS='compiler-rt;lld' \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=$PWD/../install \
+        -DLLVM_TARGETS_TO_BUILD="AArch64;ARM;WebAssembly" \
+        -DLLVM_ENABLE_ASSERTIONS=$LLVM_ENABLE_ASSERTIONS \
+        -DCOMPILER_RT_INCLUDE_TESTS=OFF \
+        -DLLVM_INCLUDE_TESTS=OFF \
+        -DCOMPILER_RT_USE_LIBCXX=OFF \
+        -DLLVM_ENABLE_TERMINFO=OFF \
+        -DLLVM_ENABLE_LIBEDIT=OFF \
+        -DLLVM_BINUTILS_INCDIR=/usr/include \
+        -DCMAKE_CXX_FLAGS='-static-libstdc++ -Wno-class-memaccess -Wno-cast-function-type'
+    - ninja -j64 install
+    - cd ..
+    # Pack installation dir
+    - |
+      set -eo pipefail
+      if [ "$IS_GIT_TAG" = "true" ]; then
+        artifactID=${GIT_TAG_NAME:5}
+      else
+        artifactID=${COMMIT:0:8}
+      fi
+      assertsSuffix=""
+      if [ "$LLVM_ENABLE_ASSERTIONS" = "ON" ]; then
+        assertsSuffix="-withAsserts"
+      fi
+      artifactName=llvm-$artifactID-linux-aarch64$assertsSuffix
+      mv install $artifactName
+      artifact=$artifactName.tar.xz
+      tar -cf - $artifactName | 7za a $artifact -si -txz -mx9
+      ls -l $artifact
+    # Upload to GitHub release (only for branches and tags, no PRs)
+    - |
+      set -e
+      if [ "$IS_PULL_REQUEST" = "true" ]; then
+        echo 'Skipping'
+      else
+        if [ "$IS_GIT_TAG" = "false" ]; then
+          releaseTag=CI
+        else
+          releaseTag=$GIT_TAG_NAME
+        fi
+        releaseID=$(curl -s https://api.github.com/repos/ldc-developers/llvm-project/releases/tags/$releaseTag | grep -m 1 '^  "id":')
+        releaseID=${releaseID:8:-1}
+        echo "Uploading $artifact to GitHub release $releaseTag ($releaseID)..."
+        curl -s \
+          -H "Authorization: token $GITHUB_TOKEN" \
+          -H "Content-Type: application/octet-stream" \
+          --data-binary @$artifact \
+          https://uploads.github.com/repos/ldc-developers/llvm-project/releases/$releaseID/assets?name=$artifact
+      fi
+
+integrations:
+  notifications:
+    - integrationName: email
+      type: email
+      on_success: never
+      on_failure: never
+      on_cancel: never
+      on_pull_request: never

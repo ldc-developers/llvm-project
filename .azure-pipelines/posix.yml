@@ -1,0 +1,59 @@
+# Each step starts in the checked-out source directory,
+# environment variables aren't persisted across steps.
+
+steps:
+- script: |
+    set -ex
+    cd ..
+    if [ "$CI_OS" = "osx" ]; then export PATH="$PWD/ninja:$PATH"; fi
+    cmake --version
+    ninja --version
+    mkdir build
+    cd build
+    cmake -G Ninja $BUILD_SOURCESDIRECTORY/llvm \
+      -DLLVM_ENABLE_PROJECTS='compiler-rt;lld' \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$PWD/../install \
+      -DLLVM_TARGETS_TO_BUILD="$LLVM_TARGETS_TO_BUILD" \
+      -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="$LLVM_EXPERIMENTAL_TARGETS_TO_BUILD" \
+      -DLLVM_ENABLE_ASSERTIONS=$LLVM_ENABLE_ASSERTIONS \
+      $BASE_CMAKE_FLAGS $EXTRA_CMAKE_FLAGS
+    ninja install
+  displayName: Build & install LLVM incl. LLD, compiler-rt and the Khronos SPIRV-LLVM-Translator
+- script: |
+    set -ex
+    cd ..
+    if [ "${BUILD_SOURCEBRANCH:0:10}" = "refs/tags/" ]; then
+      ARTIFACT_ID=${BUILD_SOURCEBRANCH:15}
+    else
+      ARTIFACT_ID=${BUILD_SOURCEVERSION:0:8}
+    fi
+    ASSERTS_SUFFIX=""
+    if [ "$LLVM_ENABLE_ASSERTIONS" = "ON" ]; then
+      ASSERTS_SUFFIX="-withAsserts"
+    fi
+    artifactName=llvm-$ARTIFACT_ID-$CI_OS-$ARCH$ASSERTS_SUFFIX
+    mv install $artifactName
+    mkdir artifacts
+    chmod -R go=rX $artifactName
+    if [ "$CI_OS" = "osx" ]; then
+      sudo chown -R root:wheel $artifactName
+      tar -cJf artifacts/$artifactName.tar.xz --options='compression-level=9' $artifactName
+    else
+      XZ_OPT=-9 tar -cJf artifacts/$artifactName.tar.xz --owner=0 --group=0 $artifactName
+    fi
+    # Persist the ARTIFACT_ID and ASSERTS_SUFFIX variables for future steps
+    set +x
+    echo "##vso[task.setvariable variable=ARTIFACT_ID]$ARTIFACT_ID"
+    echo "##vso[task.setvariable variable=ASSERTS_SUFFIX]$ASSERTS_SUFFIX"
+  displayName: Pack installation dir
+- script: |
+    set -ex
+    cd ..
+    artifactName=llvm-$ARTIFACT_ID.src
+    chmod -R go=rX $BUILD_SOURCESDIRECTORY
+    XZ_OPT=-9 tar -cJf artifacts/$artifactName.tar.xz --exclude-vcs --owner=0 --group=0 --transform=s,${BUILD_SOURCESDIRECTORY:1},$artifactName, $BUILD_SOURCESDIRECTORY
+  displayName: Pack source dir
+  condition: and(succeeded(), and(eq(variables['CI_OS'], 'linux'), eq(variables['LLVM_ENABLE_ASSERTIONS'], 'OFF')))
+- publish: ../artifacts
+  artifact: $(CI_OS)-$(ARCH)$(ASSERTS_SUFFIX)
