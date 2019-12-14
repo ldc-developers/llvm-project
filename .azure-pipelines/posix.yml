@@ -1,0 +1,61 @@
+# Each step starts in the checked-out source directory,
+# environment variables aren't persisted across steps.
+
+steps:
+- script: |
+    set -ex
+    cd ..
+    if [ "$CI_OS" = "osx" ]; then export PATH="$PWD/ninja:$PATH"; fi
+    cmake --version
+    ninja --version
+    mkdir build
+    cd build
+    cmake -G Ninja $BUILD_SOURCESDIRECTORY/llvm \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$PWD/../install \
+      -DLLVM_ENABLE_PROJECTS="$LLVM_PROJECTS_TO_ENABLE" \
+      -DLLVM_TARGETS_TO_BUILD="$LLVM_TARGETS_TO_BUILD" \
+      -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="$LLVM_EXPERIMENTAL_TARGETS_TO_BUILD" \
+      -DLLVM_ENABLE_ASSERTIONS=$LLVM_ENABLE_ASSERTIONS \
+      $BASE_CMAKE_FLAGS $EXTRA_CMAKE_FLAGS $EXTRA_CMAKE_FLAGS_ANDROID
+    ninja install
+  displayName: Build & install LLVM incl. LLD, compiler-rt, MLIR and the Khronos SPIRV-LLVM-Translator
+- script: |
+    set -ex
+    cd ..
+    if [ "${BUILD_SOURCEBRANCH:0:10}" = "refs/tags/" ]; then
+      ARTIFACT_ID=${BUILD_SOURCEBRANCH:15}
+    else
+      ARTIFACT_ID=${BUILD_SOURCEVERSION:0:8}
+    fi
+    ASSERTS_SUFFIX=""
+    if [ "$LLVM_ENABLE_ASSERTIONS" = "ON" ]; then
+      ASSERTS_SUFFIX="-withAsserts"
+    fi
+    artifactName=llvm-$ARTIFACT_ID-$CI_OS-$ARCH$ASSERTS_SUFFIX
+    mv install $artifactName
+    mkdir artifacts
+    chmod -R go=rX $artifactName
+    if [ "$CI_OS" = "osx" ]; then
+      sudo chown -R root:wheel $artifactName
+      tar -cJf artifacts/$artifactName.tar.xz --options='compression-level=9' $artifactName
+    else
+      tar -cf - --owner=0 --group=0 $artifactName | 7za a artifacts/$artifactName.tar.xz -si -txz -mx9
+    fi
+    # Persist the ARTIFACT_ID and ASSERTS_SUFFIX variables for future steps
+    set +x
+    echo "##vso[task.setvariable variable=ARTIFACT_ID]$ARTIFACT_ID"
+    echo "##vso[task.setvariable variable=ASSERTS_SUFFIX]$ASSERTS_SUFFIX"
+  displayName: Pack installation dir
+- script: |
+    set -ex
+    artifactName=llvm-$ARTIFACT_ID.src
+    # just the LLVM src dir (already incl. LLVM-SPIRV-Translator) + compiler-rt + lld + mlir
+    mv compiler-rt mlir llvm/projects
+    mv lld llvm/tools
+    chmod -R go=rX llvm
+    tar -cf - --exclude-vcs --owner=0 --group=0 --transform=s,${BUILD_SOURCESDIRECTORY:1}/llvm,$artifactName, $BUILD_SOURCESDIRECTORY/llvm | 7za a ../artifacts/$artifactName.tar.xz -si -txz -mx9
+  displayName: Pack source dir
+  condition: and(succeeded(), and(eq(variables['CI_OS'], 'linux'), eq(variables['LLVM_ENABLE_ASSERTIONS'], 'OFF')))
+- publish: ../artifacts
+  artifact: $(CI_OS)-$(ARCH)$(ASSERTS_SUFFIX)
