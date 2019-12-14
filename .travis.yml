@@ -1,0 +1,111 @@
+os: linux
+dist: bionic
+arch: arm64
+language: cpp
+
+env:
+  global:
+    - CLANG_VERSION: 14.0.0
+    # no MLIR, it increases compile times dangerously for 50 min timeout
+    - LLVM_PROJECTS_TO_ENABLE: '"bolt;compiler-rt;lld"'
+    # keep these in sync with azure-pipelines.yml for Linux x64:
+    - LLVM_TARGETS_TO_BUILD: all
+    - BASE_CMAKE_FLAGS: '"-DLLVM_ENABLE_UNWIND_TABLES=OFF -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DCOMPILER_RT_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TESTS=OFF -DCOMPILER_RT_USE_LIBCXX=OFF"'
+    - EXTRA_CMAKE_FLAGS: '"-DLLVM_BINUTILS_INCDIR=/usr/include -DLLVM_STATIC_LINK_CXX_STDLIB=ON"'
+    - secure: "OdbRvOLlVNsk0mciOrZzCGE8bBpQ+7pQXKmGCcVzMD3ixg/P92byy14slYRiPUvRLukznal0sXRTN/0j9pDMjACY7cLXLgvZQWxDNZ2pHUewyqGbkSZ5A/Nt3H5R8XknRk6W6T+19Cf6uhx5elciTU48BKXvwDXdPfMc1Q2XWo5bY7n1BfKW1llM//dX/zF13WOia9PDIu3KqcAZ6Ea764LN4BV48k3NzE8ss9ZBvvIJCZ9DgDx71TFd1c9dQQF8ZTKyeQ8Sv5dunFJbVlTPyIsRJw+D7/BUuqUMfSVjK9QG5t/QmuZaB3MrlM1+ZYZnowG2l7H4hOIainxUmvheMlKYQdfyypoD7rhy5/0WXdHGo8ga8Eue9w0vvmxqoq0AMFuxBejrHNQlDl9bXcznLUKD52M5ROLBBmG/3UYK9ar6nvufU0ERQ/xpo1nA9pmgpQ6NJD1ZV3ExdZINj2hOMil/Tyn5RuMSgwx55H9vo/7NwHt6vYKA7B1fzz/gK38tKJtPfE841QxgYkfsNc0d5r2x4ZCLCol/hJgRw/mTO4ISLPnyFnYIfHjLeheGVzMaQpRFAtwWFDPJl/v4Rhrv1BMxgS3QjgtOxGjLGMyok3qk0q+pN+oJHFpfSMJ3I/LbEunEFJiuziJRNQDPJTMAfR94uLisec0dcJPyxPQL6uc="
+
+git:
+  depth: 50
+
+addons:
+  apt:
+    packages:
+      - ninja-build
+      - binutils-dev
+      - p7zip-full
+
+jobs:
+  include:
+    - env: LLVM_ENABLE_ASSERTIONS=ON
+    - env: LLVM_ENABLE_ASSERTIONS=OFF
+
+script:
+  - nproc
+  - free
+  # Install a more recent version of CMake
+  - curl --max-time 300 --retry 3 -L -o cmake.tar.gz https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-aarch64.tar.gz
+  - mkdir cmake_bin
+  - tar -xf cmake.tar.gz --strip 1 -C cmake_bin
+  - export PATH="$PWD/cmake_bin/bin:$PATH"
+  # Download & extract clang
+  - curl --max-time 300 --retry 3 -L -o clang.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-$CLANG_VERSION/clang+llvm-$CLANG_VERSION-aarch64-linux-gnu.tar.xz
+  - mkdir clang_bin
+  - tar -xf clang.tar.xz --strip 1 -C clang_bin
+  - rm clang.tar.xz
+  - export CC="$PWD/clang_bin/bin/clang"
+  - export CXX="$PWD/clang_bin/bin/clang++"
+  # Build & install LLVM incl. LLD, compiler-rt, BOLT and the Khronos SPIRV-LLVM-Translator
+  - cmake --version
+  - ninja --version
+  - mkdir build
+  - cd build
+  - |
+    cmake -G Ninja ../llvm \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$PWD/../install \
+      -DLLVM_ENABLE_PROJECTS="$LLVM_PROJECTS_TO_ENABLE" \
+      -DLLVM_TARGETS_TO_BUILD="$LLVM_TARGETS_TO_BUILD" \
+      -DLLVM_ENABLE_ASSERTIONS=$LLVM_ENABLE_ASSERTIONS \
+      $BASE_CMAKE_FLAGS $EXTRA_CMAKE_FLAGS
+  - |
+    # work around out-of-memory kills
+    for N in 16 8 4 2; do
+      ninja -j$N -k0 && break
+    done
+  - ninja -j1 install
+  - cd ..
+  # Pack installation dir
+  - |
+    set -eo pipefail
+    if [ "$TRAVIS_TAG" != "" ]; then
+      artifactID=${TRAVIS_TAG:5}
+    else
+      artifactID=${TRAVIS_COMMIT:0:8}
+    fi
+    assertsSuffix=""
+    if [ "$LLVM_ENABLE_ASSERTIONS" = "ON" ]; then
+      assertsSuffix="-withAsserts"
+    fi
+    artifactName=llvm-$artifactID-linux-aarch64$assertsSuffix
+    mv install $artifactName
+    chmod -R go=rX $artifactName
+    artifact=$artifactName.tar.xz
+    echo "Packing $artifact..."
+    tar -cf - --owner=0 --group=0 $artifactName | 7za a $artifact -si -txz -mx9 -mmt8
+    ls -lh $artifact
+    export artifact
+
+after_success:
+  # Upload to GitHub release (only for branches and tags, no PRs)
+  - |
+    set -e
+    if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then
+      echo 'Skipping deployment'
+    else
+      if [ "$TRAVIS_TAG" = "" ]; then
+        releaseTag=CI
+      else
+        releaseTag=$TRAVIS_TAG
+      fi
+      releaseID="$(bash -c "curl -s https://api.github.com/repos/ldc-developers/llvm-project/releases/tags/$releaseTag | grep -m 1 '^  \"id\":'")"
+      releaseID=${releaseID:8:-1}
+      echo "Uploading $artifact to GitHub release $releaseTag ($releaseID)..."
+      curl -s \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Content-Type: application/octet-stream" \
+        --data-binary @$artifact \
+        https://uploads.github.com/repos/ldc-developers/llvm-project/releases/$releaseID/assets?name=$artifact
+    fi
+
+notifications:
+  email: false
