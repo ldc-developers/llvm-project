@@ -19,6 +19,17 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/VersionTuple.h"
 
+// LDC-specific
+#define LDC_LLVM_SUPPORTS_MACHO_DWARF_LINE_AS_REGULAR_SECTION
+namespace ldc {
+// Mach-O: emit __debug_line section in __DWARF segment as regular section
+// (S_REGULAR) instead of default S_ATTR_DEBUG, like DMD?
+// druntime's rt.backtrace attempts to read that section from the executable,
+// and debug sections are stripped by the linker. See
+// https://github.com/dlang/dmd/commit/2bf7d0db29416eacbb01a91e6502140e354ee0ef.
+extern bool emitMachODwarfLineAsRegularSection; // defaults to false
+} // end namespace ldc
+
 namespace llvm {
 class MCContext;
 class MCSection;
