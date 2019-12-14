@@ -287,6 +287,9 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
     LocalUDTs.clear();
   }
 
+  // LDC
+  const char *getScopeSeparator() const;
+
   /// Emit the magic version number at the start of a CodeView type or symbol
   /// section. Appears at the front of every .debug$S or .debug$T or .debug$P
   /// section.
