@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "../assembly.h"
+#include "safeseh.h"
 
 // di_int __ashldi3(di_int input, int count);
 
@@ -17,6 +18,7 @@
 #ifdef __SSE2__
 
 .text
+WIN32_SAFE_SEH_HEADER
 .balign 4
 DEFINE_COMPILERRT_FUNCTION(__ashldi3)
 	movd	  12(%esp),		%xmm2	// Load count
@@ -37,6 +39,7 @@ END_COMPILERRT_FUNCTION(__ashldi3)
 #else // Use GPRs instead of SSE2 instructions, if they aren't available.
 
 .text
+WIN32_SAFE_SEH_HEADER
 .balign 4
 DEFINE_COMPILERRT_FUNCTION(__ashldi3)
 	movl	  12(%esp),		%ecx	// Load count
