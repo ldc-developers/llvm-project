@@ -13,7 +13,9 @@
 
 #include "AArch64MCExpr.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/MC/MCAssembler.h" // LDC
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCObjectFileInfo.h" // LDC
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbolELF.h"
 #include "llvm/MC/MCValue.h"
@@ -129,7 +131,12 @@ static void fixELFSymbolsInTLSFixupsImpl(const MCExpr *Expr, MCAssembler &Asm) {
     // We're known to be under a TLS fixup, so any symbol should be
     // modified. There should be only one.
     const MCSymbolRefExpr &SymRef = *cast<MCSymbolRefExpr>(Expr);
-    cast<MCSymbolELF>(SymRef.getSymbol()).setType(ELF::STT_TLS);
+    // LDC
+    {
+      auto ofi = Asm.getContext().getObjectFileInfo();
+      if (!(ofi && ofi->getTargetTriple().isAndroid()))
+        cast<MCSymbolELF>(SymRef.getSymbol()).setType(ELF::STT_TLS);
+    }
     break;
   }
 
