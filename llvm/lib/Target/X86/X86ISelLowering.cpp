@@ -19366,6 +19366,9 @@ X86TargetLowering::LowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const {
   bool PositionIndependent = isPositionIndependent();
 
   if (Subtarget.isTargetELF()) {
+    if (Subtarget.isTargetAndroid())
+      return LowerToAndroidEmulatedTLSAddress(Op, LowerGlobalAddress(Op, DAG), DAG, Subtarget.is64Bit()); // LDC
+
     TLSModel::Model model = DAG.getTarget().getTLSModel(GV);
     switch (model) {
       case TLSModel::GeneralDynamic:
