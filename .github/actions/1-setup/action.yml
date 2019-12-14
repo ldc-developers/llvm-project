@@ -1,0 +1,96 @@
+name: Install prerequisites
+inputs:
+  arch:
+    required: true
+runs:
+  using: composite
+  steps:
+
+    - name: 'Linux: Install required apt packages'
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -eux
+        cd ..
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get -q update
+        sudo -E apt-get -yq install \
+          git-core curl xz-utils g++ python3 pkgconf binutils-dev libzstd-dev zlib1g-dev p7zip-full unzip \
+          lsb-release wget software-properties-common gnupg # prerequisites of apt.llvm.org install script
+
+    - name: 'Linux: Install clang 21 from apt.llvm.org'
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -eux
+        cd ..
+        curl -fL --retry 3 --max-time 30 -O https://apt.llvm.org/llvm.sh
+        sudo bash llvm.sh 21
+
+        # use it as C(++) compiler for future steps
+        echo "CC=clang-21" >> $GITHUB_ENV
+        echo "CXX=clang++-21" >> $GITHUB_ENV
+
+        # make bundled lld the default linker
+        sudo ln -sf ld.lld-21 /usr/bin/ld
+        ld --version
+
+    - name: 'macOS: Install Homebrew clang 21'
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        set -eux
+        brew install llvm@21
+
+        if [[ '${{ inputs.arch }}' == arm64 ]]; then
+          prefix="/opt/homebrew/opt/llvm"
+        else
+          prefix="/usr/local/opt/llvm"
+        fi
+
+        # use it as C(++) compiler for future steps
+        echo "CC=$prefix/bin/clang" >> $GITHUB_ENV
+        echo "CXX=$prefix/bin/clang++" >> $GITHUB_ENV
+
+        # https://github.com/actions/runner-images/issues/10035#issue-2344536514
+        sudo xcode-select -s /Library/Developer/CommandLineTools
+        xcrun --show-sdk-path
+        ls -l /Library/Developer/CommandLineTools/SDKs
+
+        # https://github.com/llvm/llvm-project/issues/155531#issuecomment-3229499205
+        rm -rf "$prefix/include/c++/v1"
+
+    - name: 'Windows: Install clang 21 from GitHub'
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        set -eux
+        cd ..
+
+        url='https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.7/LLVM-21.1.7-win64.exe'
+        if [[ '${{ inputs.arch }}' == arm64 ]]; then
+          url='https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.7/LLVM-21.1.7-woa64.exe'
+        fi
+
+        curl -fL --retry 3 --max-time 300 -o clang.exe "$url"
+        ./clang.exe //S # double-slash for bash
+        rm clang.exe
+
+        # C:\Program Files\LLVM\bin should already be in PATH
+        clang-cl --version
+
+        # use it as C(++) compiler for future steps
+        echo "CC=clang-cl" >> $GITHUB_ENV
+        echo "CXX=clang-cl" >> $GITHUB_ENV
+
+        if [[ '${{ inputs.arch }}' == x86 ]]; then
+          # make CMake configure 64-bit clang-cl for 32-bit code emission
+          echo "CFLAGS=-m32" >> $GITHUB_ENV
+          echo "CXXFLAGS=-m32" >> $GITHUB_ENV
+          echo "ASMFLAGS=-m32" >> $GITHUB_ENV
+        fi
+
+    - name: 'Windows: Set LDC_VSDIR env variable'
+      if: runner.os == 'Windows'
+      shell: bash
+      run: echo "LDC_VSDIR=$(vswhere -latest -property installationPath)" >> $GITHUB_ENV
