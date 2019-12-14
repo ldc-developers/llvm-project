@@ -1457,7 +1457,7 @@ void LinkerDriver::linkerMain(ArrayRef<const char *> argsArr) {
     v.push_back(arg->getValue());
     config->mllvmOpts.emplace_back(arg->getValue());
   }
-  {
+  if (v.size() > 1) {
     llvm::TimeTraceScope timeScope2("Parse cl::opt");
     cl::ResetAllOptionOccurrences();
     cl::ParseCommandLineOptions(v.size(), v.data());
