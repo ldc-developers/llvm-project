@@ -22,6 +22,11 @@
 
 using namespace llvm;
 
+// LDC-specific
+namespace ldc {
+bool emitMachODwarfLineAsRegularSection = false;
+} // end namespace ldc
+
 static bool useCompactUnwind(const Triple &T) {
   // Only on darwin.
   if (!T.isOSDarwin())
@@ -227,9 +232,12 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
   DwarfInfoSection =
       Ctx->getMachOSection("__DWARF", "__debug_info", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata(), "section_info");
-  DwarfLineSection =
-      Ctx->getMachOSection("__DWARF", "__debug_line", MachO::S_ATTR_DEBUG,
-                           SectionKind::getMetadata(), "section_line");
+  DwarfLineSection = Ctx->getMachOSection(
+      "__DWARF", "__debug_line",
+      // LDC-specific
+      ldc::emitMachODwarfLineAsRegularSection ? MachO::S_REGULAR
+                                              : MachO::S_ATTR_DEBUG,
+      SectionKind::getMetadata(), "section_line");
   DwarfLineStrSection =
       Ctx->getMachOSection("__DWARF", "__debug_line_str", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata(), "section_line_str");
