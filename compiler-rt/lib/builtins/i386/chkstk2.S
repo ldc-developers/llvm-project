@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "../assembly.h"
+#include "safeseh.h"
 
 #ifdef __i386__
 
@@ -27,6 +28,7 @@
 // %esp - that function is defined in chkstk.S.
 
 .text
+WIN32_SAFE_SEH_HEADER
 .balign 4
 DEFINE_COMPILERRT_FUNCTION(_alloca) // _chkstk and _alloca are the same function
 // This gets decorated into "___chkstk"; GCC < 4.6 references this symbol.

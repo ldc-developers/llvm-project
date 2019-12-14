@@ -320,7 +320,7 @@ set(x86_80_BIT_SOURCES
   truncxfhf2.c
 )
 
-if (NOT MSVC)
+if (NOT CMAKE_ASM_COMPILER_ID MATCHES "MSVC")
   set(x86_64_SOURCES
     ${GENERIC_SOURCES}
     ${GENERIC_TF_SOURCES}
@@ -336,7 +336,7 @@ if (NOT MSVC)
     )
   endif()
 
-  if (NOT ANDROID)
+  if (NOT ANDROID AND NOT MSVC)
     set(x86_64_SOURCES
       ${x86_64_SOURCES}
       ${x86_80_BIT_SOURCES}
@@ -377,7 +377,7 @@ if (NOT MSVC)
     i386/umoddi3.S
   )
 
-  if (NOT ANDROID)
+  if (NOT ANDROID AND NOT MSVC)
     set(i386_SOURCES
       ${i386_SOURCES}
       ${x86_80_BIT_SOURCES}
@@ -393,7 +393,7 @@ if (NOT MSVC)
       i386/chkstk2.S
     )
   endif()
-else () # MSVC
+else () # MSVC assembler
   # Use C versions of functions when building on MSVC
   # MSVC's assembler takes Intel syntax, not AT&T syntax.
   # Also use only MSVC compilable builtin implementations.
@@ -404,7 +404,13 @@ else () # MSVC
     x86_64/floatdisf.c
   )
   set(i386_SOURCES ${GENERIC_SOURCES} ${x86_ARCH_SOURCES})
-endif () # if (NOT MSVC)
+endif ()
+
+if (MSVC)
+  set_source_files_properties(
+    ${x86_64_SOURCES} ${i386_SOURCES}
+    PROPERTIES COMPILE_FLAGS "/GS- /Zl")
+endif()
 
 
 # builtin support for Targets that have Arm state or have Thumb2
