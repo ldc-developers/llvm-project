@@ -1,0 +1,231 @@
+# https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions
+
+name: LDC-specific release
+on:
+  - pull_request
+  - push
+  - workflow_dispatch
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # no recent official clang packages for Ubuntu 20
+  CLANG_VERSION: 15.0.6
+  # Prevent dependencies on some purely optional libraries, and a dependency on clang
+  # for compiler-rt tests.
+  BASE_CMAKE_FLAGS: >-
+    -DLLVM_ENABLE_TERMINFO=OFF
+    -DLLVM_ENABLE_LIBEDIT=OFF
+    -DLLVM_USE_STATIC_ZSTD=TRUE
+    -DCOMPILER_RT_INCLUDE_TESTS=OFF
+    -DLLVM_INCLUDE_TESTS=OFF
+    -DCOMPILER_RT_USE_LIBCXX=OFF
+
+jobs:
+  build-native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - job_name: Windows x64
+            os: windows-2022
+            arch: x64
+            with_asserts: false
+          - job_name: Windows x64 withAsserts
+            os: windows-2022
+            arch: x64
+            with_asserts: true
+          - job_name: Windows x86
+            os: windows-2022
+            arch: x86
+            with_asserts: false
+          - job_name: Windows x86 withAsserts
+            os: windows-2022
+            arch: x86
+            with_asserts: true
+          - job_name: Linux x86_64
+            os: ubuntu-20.04
+            arch: x86_64
+            with_asserts: false
+          - job_name: Linux x86_64 withAsserts
+            os: ubuntu-20.04
+            arch: x86_64
+            with_asserts: true
+          - job_name: macOS arm64
+            os: macos-14
+            arch: arm64
+            with_asserts: false
+          - job_name: macOS arm64 withAsserts
+            os: macos-14
+            arch: arm64
+            with_asserts: true
+          - job_name: macOS x86_64
+            os: macos-12
+            arch: x86_64
+            with_asserts: false
+          - job_name: macOS x86_64 withAsserts
+            os: macos-12
+            arch: x86_64
+            with_asserts: true
+    name: ${{ matrix.job_name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 240
+    env:
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.arch == 'arm64' && '11.0' || '10.12' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: 'macOS 14: Switch to Xcode 16'
+        if: matrix.os == 'macos-14'
+        run: sudo xcode-select -switch /Applications/Xcode_16.app
+      - name: Install prerequisites
+        uses: ./.github/actions/1-setup
+        with:
+          # on Windows, the MSVC headers require clang 16+
+          clang_version: ${{ runner.os == 'Windows' && '19.1.3' || env.CLANG_VERSION }}
+          arch: ${{ matrix.arch }}
+      # BOLT supports ELF binaries only, so include it for Linux packages only
+      - name: Build & install LLVM incl. LLD, compiler-rt${{ runner.os == 'Linux' && ', BOLT' || '' }}
+        uses: ./.github/actions/2-build
+        with:
+          arch: ${{ matrix.arch }}
+          enable_projects: compiler-rt;lld${{ runner.os == 'Linux' && ';bolt' || '' }}
+          targets_to_build: all
+          experimental_targets_to_build: SPIRV;Xtensa
+          with_asserts: ${{ matrix.with_asserts }}
+          # - link C++ standard library statically for improved portability on Windows and Linux
+          # - on Windows, avoid wrongly detected libxml2 on GHA runner
+          # - on Linux, need LLVM_BINUTILS_INCDIR to generate LTO linker plugin
+          # - on macOS, disable libzstd dependency
+          extra_cmake_flags: >-
+            ${{ env.BASE_CMAKE_FLAGS }}
+            ${{ runner.os == 'Windows' && '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DLLVM_ENABLE_LIBXML2=OFF' || '' }}
+            ${{ runner.os == 'Linux' && '-DLLVM_BINUTILS_INCDIR=/usr/include -DLLVM_STATIC_LINK_CXX_STDLIB=ON' || '' }}
+            ${{ runner.os == 'macOS' && '-DLLVM_ENABLE_ZSTD=OFF' || '' }}
+      - name: Create package & upload artifact
+        uses: ./.github/actions/3-package
+        with:
+          arch: ${{ matrix.arch }}
+          with_asserts: ${{ matrix.with_asserts }}
+
+  build-cross:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - job_name: Android armv7a
+            host_os: ubuntu-20.04
+            os: android
+            arch: armv7a
+            targets_to_build: AArch64;ARM;WebAssembly;X86
+            experimental_targets_to_build: SPIRV
+          - job_name: Android aarch64
+            host_os: ubuntu-20.04
+            os: android
+            arch: aarch64
+            targets_to_build: AArch64;ARM;WebAssembly;X86
+            experimental_targets_to_build: SPIRV
+    name: ${{ matrix.job_name }}
+    runs-on: ${{ matrix.host_os }}
+    timeout-minutes: 240
+    env:
+      ANDROID_NDK_VERSION: r27c
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install prerequisites
+        uses: ./.github/actions/1-setup
+        with:
+          clang_version: ${{ env.CLANG_VERSION }}
+          arch: ${{ matrix.arch }}
+      - name: Build native llvm-tblgen
+        shell: bash
+        run: |
+          set -eux
+          cd ..
+          mkdir build-native
+          cd build-native
+          cmake -G Ninja ../llvm-project/llvm \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DLLVM_TARGETS_TO_BUILD="${{ matrix.targets_to_build }}" \
+            -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="${{ matrix.experimental_targets_to_build }}" \
+            ${{ env.BASE_CMAKE_FLAGS }}
+          ninja llvm-tblgen
+      - name: Set up cross-compilation
+        shell: bash
+        run: |
+          set -eux
+          os='${{ matrix.os }}'
+          arch='${{ matrix.arch }}'
+          if [[ "$os" == android ]]; then
+            # download & extract Android NDK
+            cd ..
+            curl -fL --retry 3 --max-time 300 -o android-ndk.zip \
+              https://dl.google.com/android/repository/android-ndk-$ANDROID_NDK_VERSION-linux.zip
+            unzip android-ndk.zip >/dev/null
+            mv "android-ndk-$ANDROID_NDK_VERSION" android-ndk
+            rm android-ndk.zip
+
+            flags=(
+              -DCMAKE_TOOLCHAIN_FILE="$PWD/android-ndk/build/cmake/android.toolchain.cmake"
+              -DANDROID_USE_LEGACY_TOOLCHAIN_FILE=OFF
+              -DANDROID_NATIVE_API_LEVEL=29
+              -DANDROID_STL=c++_static
+              -DCMAKE_CROSSCOMPILING=True
+              -DLLVM_ENABLE_PLUGINS=OFF
+              -DCOMPILER_RT_BUILD_SANITIZERS=OFF # various build errors unfortunately
+              #-DSANITIZER_CXX_ABI=libc++
+              #-DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON
+              #-DCOMPILER_RT_USE_LLVM_UNWINDER=ON
+            )
+            if [[ "$arch" == armv7a ]]; then
+              flags+=(
+                -DANDROID_ABI=armeabi-v7a
+                -DLLVM_TARGET_ARCH=ARM
+                -DLLVM_DEFAULT_TARGET_TRIPLE=armv7a-none-linux-androideabi29
+                -DCOMPILER_RT_BUILD_MEMPROF=OFF # compile error for libinterception
+              )
+            elif [[ "$arch" == aarch64 ]]; then
+              flags+=(
+                -DANDROID_ABI=arm64-v8a
+                -DLLVM_TARGET_ARCH=AArch64
+                -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-none-linux-android29
+              )
+            fi
+          fi
+          echo "EXTRA_CMAKE_FLAGS_CROSS=${flags[*]}" >> $GITHUB_ENV
+      - name: Cross-build & install LLVM incl. LLD, compiler-rt, BOLT
+        uses: ./.github/actions/2-build
+        with:
+          # exclude BOLT for 32-bit ARM (regressed with LLVM 18)
+          enable_projects: compiler-rt;lld${{ matrix.arch != 'armv7a' && ';bolt' || '' }}
+          targets_to_build: ${{ matrix.targets_to_build }}
+          experimental_targets_to_build: ${{ matrix.experimental_targets_to_build }}
+          with_asserts: ${{ matrix.with_asserts }}
+          extra_cmake_flags: >-
+            ${{ env.BASE_CMAKE_FLAGS }}
+            -DLLVM_TABLEGEN="${{ github.workspace }}/../build-native/bin/llvm-tblgen"
+            -DLLVM_CONFIG_PATH="${{ github.workspace }}/../build-native/bin/llvm-config"
+            ${{ env.EXTRA_CMAKE_FLAGS_CROSS }}
+      - name: Create package & upload artifact
+        uses: ./.github/actions/3-package
+        with:
+          arch: ${{ matrix.arch }}
+          os: ${{ matrix.os }}
+          with_asserts: ${{ matrix.with_asserts }}
+
+  upload-to-github:
+    name: Upload to GitHub
+    # only run for branches and tags, no PRs
+    if: startsWith(github.ref, 'refs/tags/ldc-v') || startsWith(github.ref, 'refs/heads/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs:
+      - build-native
+      - build-cross
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload all artifacts to GitHub release
+        uses: ./.github/actions/upload-to-github
