@@ -240,7 +240,7 @@ set(x86_ARCH_SOURCES
   powixf2.c
 )
 
-if (NOT MSVC)
+if (NOT CMAKE_ASM_COMPILER_ID MATCHES "MSVC")
   set(x86_64_SOURCES
     ${GENERIC_TF_SOURCES}
     x86_64/floatdidf.c
@@ -286,7 +286,7 @@ if (NOT MSVC)
       i386/chkstk2.S
     )
   endif()
-else () # MSVC
+else () # MSVC assembler
   # Use C versions of functions when building on MSVC
   # MSVC's assembler takes Intel syntax, not AT&T syntax.
   # Also use only MSVC compilable builtin implementations.
@@ -298,12 +298,17 @@ else () # MSVC
   )
   set(x86_64h_SOURCES ${x86_64_SOURCES})
   set(i386_SOURCES ${GENERIC_SOURCES})
-endif () # if (NOT MSVC)
+endif ()
 
 set(x86_64h_SOURCES ${x86_64h_SOURCES} ${x86_ARCH_SOURCES})
 set(x86_64_SOURCES ${x86_64_SOURCES} ${x86_ARCH_SOURCES})
 set(i386_SOURCES ${i386_SOURCES} ${x86_ARCH_SOURCES})
 set(i686_SOURCES ${i686_SOURCES} ${x86_ARCH_SOURCES})
+if (MSVC)
+  set_source_files_properties(
+    ${x86_64h_SOURCES} ${x86_64_SOURCES} ${i386_SOURCES} ${i686_SOURCES}
+    PROPERTIES COMPILE_FLAGS "/GS- /Zl")
+endif()
 
 set(arm_SOURCES
   arm/bswapdi2.S
