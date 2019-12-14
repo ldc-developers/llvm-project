@@ -5346,8 +5346,12 @@ SDValue AArch64TargetLowering::LowerGlobalTLSAddress(SDValue Op,
 
   if (Subtarget->isTargetDarwin())
     return LowerDarwinGlobalTLSAddress(Op, DAG);
-  if (Subtarget->isTargetELF())
-    return LowerELFGlobalTLSAddress(Op, DAG);
+  if (Subtarget->isTargetELF()) {
+    if (Subtarget->isTargetAndroid())
+      return LowerToAndroidEmulatedTLSAddress(Op, LowerGlobalAddress(Op, DAG), DAG, true); // LDC
+    else
+      return LowerELFGlobalTLSAddress(Op, DAG);
+  }
   if (Subtarget->isTargetWindows())
     return LowerWindowsGlobalTLSAddress(Op, DAG);
 

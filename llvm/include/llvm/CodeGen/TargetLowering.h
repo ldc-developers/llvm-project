@@ -4469,6 +4469,9 @@ public:
   virtual SDValue LowerToTLSEmulatedModel(const GlobalAddressSDNode *GA,
                                           SelectionDAG &DAG) const;
 
+  SDValue LowerToAndroidEmulatedTLSAddress(SDValue Op, SDValue Result,
+                                           SelectionDAG &DAG, bool is64bit) const; // LDC
+
   /// Expands target specific indirect branch for the case of JumpTable
   /// expanasion.
   virtual SDValue expandIndirectJTBranch(const SDLoc& dl, SDValue Value, SDValue Addr,

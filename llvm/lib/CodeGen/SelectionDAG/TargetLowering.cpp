@@ -7240,6 +7240,33 @@ SDValue TargetLowering::getVectorElementPointer(SelectionDAG &DAG,
   return DAG.getMemBasePlusOffset(VecPtr, Index, dl);
 }
 
+SDValue
+TargetLowering::LowerToAndroidEmulatedTLSAddress(SDValue Op, SDValue Result,
+                SelectionDAG &DAG, bool is64bit) const { // LDC
+  SDLoc DL(Op);
+  SDValue Chain = DAG.getEntryNode();
+  ArgListTy Args;
+  ArgListEntry Entry;
+  Type *Ty;
+  if (is64bit)
+    Ty = (Type *)Type::getInt64Ty(*DAG.getContext());
+  else
+    Ty = (Type *)Type::getInt32Ty(*DAG.getContext());
+  Entry.Node = Result;
+  Entry.Ty = Ty;
+  Args.push_back(Entry);
+
+  // copied, modified from ARMTargetLowering::LowerToTLSGeneralDynamicModel
+  TargetLowering::CallLoweringInfo CLI(DAG);
+  CLI.setDebugLoc(DL).setChain(Chain).setLibCallee(
+      CallingConv::C, Ty,
+      DAG.getExternalSymbol("__tls_get_addr",
+                            getPointerTy(DAG.getDataLayout())),
+      std::move(Args));
+  std::pair<SDValue, SDValue> CallResult = LowerCallTo(CLI);
+  return CallResult.first;
+}
+
 //===----------------------------------------------------------------------===//
 // Implementation of Emulated TLS Model
 //===----------------------------------------------------------------------===//

@@ -3513,6 +3513,8 @@ ARMTargetLowering::LowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const {
 
   // TODO: implement the "local dynamic" model
   assert(Subtarget->isTargetELF() && "Only ELF implemented here");
+  if (Subtarget->isTargetAndroid())
+    return LowerToAndroidEmulatedTLSAddress(Op, LowerGlobalAddress(Op, DAG), DAG, false); // LDC
   TLSModel::Model model = getTargetMachine().getTLSModel(GA->getGlobal());
 
   switch (model) {
