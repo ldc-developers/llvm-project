@@ -771,7 +771,8 @@ void LinkerDriver::link(ArrayRef<const char *> argsArr) {
   v.push_back("wasm-ld (LLVM option parsing)");
   for (auto *arg : args.filtered(OPT_mllvm))
     v.push_back(arg->getValue());
-  cl::ParseCommandLineOptions(v.size(), v.data());
+  if (v.size() > 1)
+    cl::ParseCommandLineOptions(v.size(), v.data());
 
   errorHandler().errorLimit = args::getInteger(args, OPT_error_limit, 20);
 
