@@ -1,0 +1,65 @@
+# Each step starts in the checked-out source directory,
+# environment variables aren't persisted across steps.
+
+steps:
+- script: |
+    set
+  displayName: Print environment variables
+- checkout: self
+  submodules: true
+  fetchDepth: 50
+- script: |
+    echo on
+    cd ..
+    :: Download & extract Ninja
+    curl -L -o ninja.zip https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-win.zip 2>&1
+    mkdir ninja
+    cd ninja
+    7z x ../ninja.zip > nul
+    cd ..
+    :: Download & install clang
+    curl -L -o clang.exe https://github.com/llvm/llvm-project/releases/download/llvmorg-%CLANG_VERSION%/LLVM-%CLANG_VERSION%-win64.exe 2>&1
+    clang.exe /S
+  displayName: Install prerequisites
+- script: |
+    echo on
+    cd ..
+    set PATH=C:\Program Files\LLVM\bin;%CD%\ninja;%PATH%
+    call "%VSINSTALLDIR%Common7\Tools\VsDevCmd.bat" -arch=%ARCH%
+    echo on
+    cmake --version
+    ninja --version
+    clang-cl --version
+    mkdir build
+    cd build
+    cmake -G Ninja %BUILD_SOURCESDIRECTORY%\llvm -DCMAKE_C_COMPILER:PATH=clang-cl.exe -DCMAKE_CXX_COMPILER:PATH=clang-cl.exe -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=%CD%/../install -DLLVM_ENABLE_PROJECTS=%LLVM_PROJECTS_TO_ENABLE% -DLLVM_TARGETS_TO_BUILD=%LLVM_TARGETS_TO_BUILD% -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=%LLVM_EXPERIMENTAL_TARGETS_TO_BUILD% -DLLVM_ENABLE_ASSERTIONS=%LLVM_ENABLE_ASSERTIONS% -DLLVM_DEFAULT_TARGET_TRIPLE=%LLVM_DEFAULT_TARGET_TRIPLE% %BASE_CMAKE_FLAGS% %EXTRA_CMAKE_FLAGS%
+    ninja install
+  displayName: Build & install LLVM incl. LLD, compiler-rt, MLIR and the Khronos SPIRV-LLVM-Translator
+- script: |
+    echo on
+    cd ..
+    :: On Windows, the lld symlinks are copies
+    rm install/bin/ld.lld.exe
+    rm install/bin/ld64.lld.exe
+    rm install/bin/lld.exe
+    rm install/bin/wasm-ld.exe
+    if "%BUILD_SOURCEBRANCH:~0,10%" == "refs/tags/" (
+      set ARTIFACT_ID=%BUILD_SOURCEBRANCH:~15%
+    ) else (
+      set ARTIFACT_ID=%BUILD_SOURCEVERSION:~0,8%
+    )
+    set ASSERTS_SUFFIX=
+    if "%LLVM_ENABLE_ASSERTIONS%" == "ON" (
+      set ASSERTS_SUFFIX=-withAsserts
+    )
+    set ARTIFACT_NAME=llvm-%ARTIFACT_ID%-windows-%ARCH%%ASSERTS_SUFFIX%
+    mv install %ARTIFACT_NAME%
+    mkdir artifacts
+    cd %ARTIFACT_NAME%
+    7z a -mx=9 ../artifacts/%ARTIFACT_NAME%.7z * > nul
+    :: Persist the ASSERTS_SUFFIX env variable for future steps
+    echo off
+    echo ##vso[task.setvariable variable=ASSERTS_SUFFIX]%ASSERTS_SUFFIX%
+  displayName: Pack installation dir
+- publish: ../artifacts
+  artifact: windows-$(ARCH)$(ASSERTS_SUFFIX)

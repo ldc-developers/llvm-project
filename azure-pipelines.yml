@@ -1,0 +1,233 @@
+variables:
+  # Version of clang host compiler.
+  CLANG_VERSION: 10.0.1
+  LLVM_PROJECTS_TO_ENABLE: compiler-rt;lld;mlir
+  LLVM_TARGETS_TO_BUILD: AArch64;AMDGPU;ARM;Mips;MSP430;NVPTX;PowerPC;RISCV;WebAssembly;X86
+  LLVM_EXPERIMENTAL_TARGETS_TO_BUILD: AVR
+  # Prevent dependencies on some purely optional libraries, and a dependency on clang
+  # for compiler-rt and SPIRV-LLVM-Translator tests.
+  BASE_CMAKE_FLAGS: -DLLVM_ENABLE_UNWIND_TABLES=OFF -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DCOMPILER_RT_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TESTS=OFF -DCOMPILER_RT_USE_LIBCXX=OFF
+
+# Although tags are supposed to trigger builds by default, they don't.
+trigger:
+- '*'
+- refs/tags/ldc-v*
+
+jobs:
+- job: Windows
+  timeoutInMinutes: 180
+  pool:
+    vmImage: 'windows-2019'
+  variables:
+    CLANG_VERSION: 10.0.0
+    VSINSTALLDIR: C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\
+    EXTRA_CMAKE_FLAGS: -DLLVM_USE_CRT_RELEASE=MT
+  strategy:
+    matrix:
+      x64:
+        ARCH: x64
+        LLVM_DEFAULT_TARGET_TRIPLE: x86_64-pc-windows-msvc
+        LLVM_ENABLE_ASSERTIONS: OFF
+      x64_withAsserts:
+        ARCH: x64
+        LLVM_DEFAULT_TARGET_TRIPLE: x86_64-pc-windows-msvc
+        LLVM_ENABLE_ASSERTIONS: ON
+      x86:
+        ARCH: x86
+        LLVM_DEFAULT_TARGET_TRIPLE: i686-pc-windows-msvc
+        LLVM_ENABLE_ASSERTIONS: OFF
+        # Let CMake configure 64-bit clang-cl for 32-bit code emission.
+        CFLAGS: -m32
+        CXXFLAGS: -m32
+        ASMFLAGS: -m32
+      x86_withAsserts:
+        ARCH: x86
+        LLVM_DEFAULT_TARGET_TRIPLE: i686-pc-windows-msvc
+        LLVM_ENABLE_ASSERTIONS: ON
+        CFLAGS: -m32
+        CXXFLAGS: -m32
+        ASMFLAGS: -m32
+  steps:
+    - template: .azure-pipelines/windows.yml
+
+- job: Linux
+  timeoutInMinutes: 180
+  pool:
+    vmImage: 'ubuntu-16.04'
+  variables:
+    CI_OS: linux
+    ARCH: x86_64
+    # To improve portability of the generated binaries, link the C++ standard library statically.
+    EXTRA_CMAKE_FLAGS: -DLLVM_BINUTILS_INCDIR=/usr/include -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+  strategy:
+    matrix:
+      x64:
+        LLVM_ENABLE_ASSERTIONS: OFF
+      x64_withAsserts:
+        LLVM_ENABLE_ASSERTIONS: ON
+  steps:
+    - checkout: self
+      submodules: true
+      fetchDepth: 50
+    - script: |
+        set -ex
+        cd ..
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get -q update
+        sudo apt-get -yq install \
+          git-core cmake ninja-build binutils-dev python p7zip-full
+        # Download & extract clang
+        curl -L -o clang.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-$CLANG_VERSION/clang+llvm-$CLANG_VERSION-x86_64-linux-gnu-ubuntu-16.04.tar.xz
+        mkdir clang
+        tar -xf clang.tar.xz --strip 1 -C clang
+        # Set CC and CXX to clang[++] for future steps
+        set +x
+        echo "##vso[task.setvariable variable=CC]$PWD/clang/bin/clang"
+        echo "##vso[task.setvariable variable=CXX]$PWD/clang/bin/clang++"
+      displayName: Install prerequisites
+    - template: .azure-pipelines/posix.yml
+
+- job: macOS
+  timeoutInMinutes: 180
+  pool:
+    vmImage: 'macOS-10.15'
+  variables:
+    CI_OS: osx
+    ARCH: x86_64
+    EXTRA_CMAKE_FLAGS: -DHAVE_FUTIMENS=0
+    MACOSX_DEPLOYMENT_TARGET: 10.9
+  strategy:
+    matrix:
+      x64:
+        LLVM_ENABLE_ASSERTIONS: OFF
+      x64_withAsserts:
+        LLVM_ENABLE_ASSERTIONS: ON
+  steps:
+    - checkout: self
+      submodules: true
+      fetchDepth: 50
+    - script: |
+        set -ex
+        cd ..
+        # Download & extract Ninja
+        curl -L -o ninja-mac.zip https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-mac.zip
+        mkdir ninja
+        tar -xf ninja-mac.zip -C ninja
+      displayName: Install prerequisites
+    - template: .azure-pipelines/posix.yml
+
+- job: Android
+  timeoutInMinutes: 180
+  pool:
+    vmImage: 'ubuntu-16.04'
+  variables:
+    CI_OS: android
+    LLVM_PROJECTS_TO_ENABLE: compiler-rt;lld
+    LLVM_TARGETS_TO_BUILD: AArch64;ARM;WebAssembly;X86
+    LLVM_EXPERIMENTAL_TARGETS_TO_BUILD: ''
+    LLVM_ENABLE_ASSERTIONS: OFF
+    ANDROID_NDK_VERSION: r21d
+  strategy:
+    matrix:
+      armv7a:
+        ARCH: armv7a
+        EXTRA_CMAKE_FLAGS: -DANDROID_ABI=armeabi-v7a -DANDROID_NATIVE_API_LEVEL=21 -DANDROID_STL=c++_static -DCMAKE_CROSSCOMPILING=True -DLLVM_TARGET_ARCH=ARM -DLLVM_DEFAULT_TARGET_TRIPLE=armv7a--linux-androideabi -DLLVM_ENABLE_PLUGINS=OFF
+      aarch64:
+        ARCH: aarch64
+        EXTRA_CMAKE_FLAGS: -DANDROID_ABI=arm64-v8a -DANDROID_NATIVE_API_LEVEL=21 -DANDROID_STL=c++_static -DCMAKE_CROSSCOMPILING=True -DLLVM_TARGET_ARCH=AArch64 -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64--linux-android -DLLVM_ENABLE_PLUGINS=OFF -DSANITIZER_CXX_ABI=libc++ -DCMAKE_CXX_FLAGS=-U_FORTIFY_SOURCE
+  steps:
+    - checkout: self
+      submodules: true
+      fetchDepth: 50
+    - script: |
+        set -ex
+        cd ..
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get -q update
+        sudo apt-get -yq install \
+          git-core cmake ninja-build g++ curl python p7zip-full unzip
+      displayName: Install prerequisites
+    - script: |
+        set -ex
+        cd ..
+        cmake --version
+        ninja --version
+        mkdir build-native
+        cd build-native
+        cmake -G Ninja $BUILD_SOURCESDIRECTORY/llvm \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DLLVM_TARGETS_TO_BUILD="$LLVM_TARGETS_TO_BUILD" \
+          -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="$LLVM_EXPERIMENTAL_TARGETS_TO_BUILD" \
+          -DLLVM_ENABLE_ASSERTIONS=$LLVM_ENABLE_ASSERTIONS \
+          $BASE_CMAKE_FLAGS
+        ninja llvm-tblgen
+      displayName: Build native llvm-tblgen
+    - script: |
+        set -ex
+        cd ..
+        # Download & extract Android NDK
+        curl -OL https://dl.google.com/android/repository/android-ndk-$ANDROID_NDK_VERSION-linux-x86_64.zip
+        unzip android-ndk-$ANDROID_NDK_VERSION-linux-x86_64.zip > /dev/null
+        rm android-ndk-$ANDROID_NDK_VERSION-linux-x86_64.zip
+        # The NDK toolchain file enforces `-g` as base C[XX] flag - remove it to
+        # *significantly* reduce executable sizes
+        TOOLCHAIN_FILE=$PWD/android-ndk-$ANDROID_NDK_VERSION/build/cmake/android.toolchain.cmake
+        sed -i 's|^  -g$||' $TOOLCHAIN_FILE
+        # Set EXTRA_CMAKE_FLAGS_ANDROID for future steps
+        set +x
+        echo "##vso[task.setvariable variable=EXTRA_CMAKE_FLAGS_ANDROID]-DLLVM_TABLEGEN=$PWD/build-native/bin/llvm-tblgen -DLLVM_CONFIG_PATH=$PWD/build-native/bin/llvm-config -DCMAKE_TOOLCHAIN_FILE=$TOOLCHAIN_FILE"
+      displayName: Set up cross-compilation
+    - template: .azure-pipelines/posix.yml
+
+# Uploads the packages to a GitHub release.
+- job: Upload_to_GitHub
+  timeoutInMinutes: 30
+  pool:
+    vmImage: 'ubuntu-16.04'
+  dependsOn:
+    - Windows
+    - Linux
+    - macOS
+    - Android
+  # Only run for branches and tags, no PRs.
+  condition: and(succeeded(), or(startsWith(variables['Build.SourceBranch'], 'refs/heads/'), startsWith(variables['Build.SourceBranch'], 'refs/tags/')))
+  steps:
+    - checkout: none
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        targetPath: artifacts
+    - bash: |
+        set -ex
+        cd artifacts
+        mv */*.* .
+        find . -type d -empty -delete
+        ls -l
+        sha256sum * > sha256sums.txt
+      displayName: Move artifact files out of their subdirs and compute hashes
+    - bash: |
+        set -ex
+        if [ "${BUILD_SOURCEBRANCH:0:10}" != "refs/tags/" ]; then
+          releaseTag=CI
+          isPreRelease=true
+          artifactID=${BUILD_SOURCEVERSION:0:8}
+        else
+          releaseTag=${BUILD_SOURCEBRANCH:10}
+          isPreRelease=false
+          artifactID=${BUILD_SOURCEBRANCH:15}
+        fi
+        mv artifacts/sha256sums.txt artifacts/llvm-$artifactID.sha256sums.txt
+        set +x
+        echo "##vso[task.setvariable variable=GITHUB_RELEASE_TAG]$releaseTag"
+        echo "##vso[task.setvariable variable=GITHUB_RELEASE_ISPRERELEASE]$isPreRelease"
+      displayName: Set GITHUB_RELEASE_{TAG,ISPRERELEASE} env variables
+    - task: GitHubRelease@0
+      inputs:
+        gitHubConnection: kinke
+        repositoryName: ldc-developers/llvm-project
+        action: edit
+        tag: $(GITHUB_RELEASE_TAG)
+        assets: artifacts/*
+        assetUploadMode: replace
+        isPreRelease: $(GITHUB_RELEASE_ISPRERELEASE)
+        addChangeLog: false
+      displayName: Upload artifacts to GitHub release
