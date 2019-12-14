@@ -332,15 +332,24 @@ const DISubprogram *CodeViewDebug::collectParentScopeNames(
 }
 
 static std::string formatNestedName(ArrayRef<StringRef> QualifiedNameComponents,
-                                    StringRef TypeName) {
+                                    StringRef TypeName,
+                                    const std::string &Separator) {
   std::string FullyQualifiedName;
   for (StringRef QualifiedNameComponent :
        llvm::reverse(QualifiedNameComponents)) {
     FullyQualifiedName.append(std::string(QualifiedNameComponent));
-    FullyQualifiedName.append("::");
+    FullyQualifiedName.append(Separator);
   }
   FullyQualifiedName.append(std::string(TypeName));
   return FullyQualifiedName;
+}
+
+// Added for LDC: use `.` as scope separator for compile units with D language
+// tag.
+const char *CodeViewDebug::getScopeSeparator() const {
+  NamedMDNode *CUs = MMI->getModule()->getNamedMetadata("llvm.dbg.cu");
+  const DICompileUnit *CU = cast<DICompileUnit>(*CUs->operands().begin());
+  return CU->getSourceLanguage() == dwarf::DW_LANG_D ? "." : "::";
 }
 
 struct CodeViewDebug::TypeLoweringScope {
@@ -363,7 +372,7 @@ std::string CodeViewDebug::getFullyQualifiedName(const DIScope *Scope,
   TypeLoweringScope S(*this);
   SmallVector<StringRef, 5> QualifiedNameComponents;
   collectParentScopeNames(Scope, QualifiedNameComponents);
-  return formatNestedName(QualifiedNameComponents, Name);
+  return formatNestedName(QualifiedNameComponents, Name, getScopeSeparator());
 }
 
 std::string CodeViewDebug::getFullyQualifiedName(const DIScope *Ty) {
@@ -1493,8 +1502,8 @@ void CodeViewDebug::addToUDTs(const DIType *Ty) {
   const DISubprogram *ClosestSubprogram =
       collectParentScopeNames(Ty->getScope(), ParentScopeNames);
 
-  std::string FullyQualifiedName =
-      formatNestedName(ParentScopeNames, getPrettyScopeName(Ty));
+  std::string FullyQualifiedName = formatNestedName(
+      ParentScopeNames, getPrettyScopeName(Ty), getScopeSeparator());
 
   if (ClosestSubprogram == nullptr) {
     GlobalUDTs.emplace_back(std::move(FullyQualifiedName), Ty);
