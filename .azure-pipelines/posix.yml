@@ -49,10 +49,12 @@ steps:
   displayName: Pack installation dir
 - script: |
     set -ex
-    cd ..
     artifactName=llvm-$ARTIFACT_ID.src
-    chmod -R go=rX $BUILD_SOURCESDIRECTORY
-    XZ_OPT=-9 tar -cJf artifacts/$artifactName.tar.xz --exclude-vcs --owner=0 --group=0 --transform=s,${BUILD_SOURCESDIRECTORY:1},$artifactName, $BUILD_SOURCESDIRECTORY
+    # just the LLVM src dir (already incl. LLVM-SPIRV-Translator) + compiler-rt + lld
+    mv compiler-rt llvm/projects
+    mv lld llvm/tools
+    chmod -R go=rX llvm
+    XZ_OPT=-9 tar -cJf ../artifacts/$artifactName.tar.xz --exclude-vcs --owner=0 --group=0 --transform=s,${BUILD_SOURCESDIRECTORY:1}/llvm,$artifactName, $BUILD_SOURCESDIRECTORY/llvm
   displayName: Pack source dir
   condition: and(succeeded(), and(eq(variables['CI_OS'], 'linux'), eq(variables['LLVM_ENABLE_ASSERTIONS'], 'OFF')))
 - publish: ../artifacts
