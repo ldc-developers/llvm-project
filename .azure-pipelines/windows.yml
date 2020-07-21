@@ -12,13 +12,13 @@ steps:
     echo on
     cd ..
     :: Download & extract Ninja
-    curl -L -o ninja.zip https://github.com/ninja-build/ninja/releases/download/v1.9.0/ninja-win.zip 2>&1
+    curl -L -o ninja.zip https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-win.zip 2>&1
     mkdir ninja
     cd ninja
     7z x ../ninja.zip > nul
     cd ..
     :: Download & install clang
-    curl -L -o clang.exe http://releases.llvm.org/%CLANG_VERSION%/LLVM-%CLANG_VERSION%-win64.exe 2>&1
+    curl -L -o clang.exe https://github.com/llvm/llvm-project/releases/download/llvmorg-%CLANG_VERSION%/LLVM-%CLANG_VERSION%-win64.exe 2>&1
     clang.exe /S
   displayName: Install prerequisites
 - script: |
