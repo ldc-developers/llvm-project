@@ -1,0 +1,102 @@
+language: cpp
+
+git:
+  depth: 50
+
+os: linux
+arch: arm64-graviton2
+group: edge
+virt: lxd
+dist: xenial
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+      - git-core
+      - cmake
+      - ninja-build
+      - g++-9
+      - binutils-dev
+      - python
+      - p7zip-full
+
+jobs:
+  include:
+    - env: LLVM_ENABLE_ASSERTIONS=ON
+    - env: LLVM_ENABLE_ASSERTIONS=OFF
+
+script:
+  # Build & install LLVM incl. LLD, compiler-rt and the Khronos SPIRV-LLVM-Translator
+  - nproc
+  - free
+  - export CC=gcc-9
+  - export CXX=g++-9
+  - cmake --version
+  - ninja --version
+  - mkdir build
+  - cd build
+  - |
+    cmake -G Ninja ../llvm \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$PWD/../install \
+      -DLLVM_ENABLE_PROJECTS='compiler-rt;lld' \
+      -DLLVM_TARGETS_TO_BUILD='AArch64;ARM;WebAssembly' \
+      -DLLVM_ENABLE_ASSERTIONS=$LLVM_ENABLE_ASSERTIONS \
+      -DLLVM_ENABLE_UNWIND_TABLES=OFF \
+      -DLLVM_ENABLE_TERMINFO=OFF \
+      -DLLVM_ENABLE_LIBEDIT=OFF \
+      -DCOMPILER_RT_INCLUDE_TESTS=OFF \
+      -DLLVM_INCLUDE_TESTS=OFF \
+      -DCOMPILER_RT_USE_LIBCXX=OFF \
+      -DLLVM_BINUTILS_INCDIR=/usr/include \
+      -DLLVM_STATIC_LINK_CXX_STDLIB=ON \
+      -DCMAKE_CXX_FLAGS='-Wno-psabi'
+  - |
+    # work around out-of-memory kills
+    for N in 8 7 7 6 6 6 5 5 5 5; do
+      ninja -j$N && break
+    done
+  - ninja -j4 install
+  - cd ..
+  # Pack installation dir
+  - |
+    set -eo pipefail
+    if [ "$TRAVIS_TAG" != "" ]; then
+      artifactID=${TRAVIS_TAG:5}
+    else
+      artifactID=${TRAVIS_COMMIT:0:8}
+    fi
+    assertsSuffix=""
+    if [ "$LLVM_ENABLE_ASSERTIONS" = "ON" ]; then
+      assertsSuffix="-withAsserts"
+    fi
+    artifactName=llvm-$artifactID-linux-aarch64$assertsSuffix
+    mv install $artifactName
+    artifact=$artifactName.tar.xz
+    echo "Packing $artifact..."
+    tar -cf - $artifactName | 7za a $artifact -si -txz -mx9
+    ls -lh $artifact
+
+# Travis deploys to the GitHub release matching git tag $TRAVIS_TAG
+after_success:
+  - |
+    if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then
+      echo 'Skipping deployment'
+    elif [ "$TRAVIS_TAG" = "" ]; then
+      echo 'Deploying to CI release'
+      export TRAVIS_TAG=CI
+    fi
+
+deploy:
+  provider: releases
+  api_key:
+    secure: "vJnenvhXJd8hSiUrwIMTux37WCrEg8ntPJlmks3oSeFSJuD5/jE6ietbBi31GWJ2CNL8SgrVNCYr8zd5dCEiwH3EJHgJwQYf5P0mm6oJ0QcdKMRMBws1xuiHv4Q1o/IOfWt6fFA7xfiU/UXU1aQM21ec4aq1AKg3NpcyYM3k8HzFZVkGgOpedxh0/pQnDjWSma8aHGOjyfYil8dWPyX7X6AO8ju4VNi3b+gd/jXX4j6fIxRBUA6cSiHl86yJGyls2blhyjTEUD/Hp4WL/3qf0Jrd7c/B8M9zA94GTt5rfsnnKwdgLpyZX+xZV6xwzUkCu0D/tD+zriz1Dl1PLaztytTufv5Gvs2uVQcSWCYvd8DjMR/t4qeX3FJqpmgCRF/TK1o5ad0bcxDTu3JMIPxPnz3sTbPwRi26CzVG6rNEB7sfWHzNO9IWBrrGnOkmsOg96R3I1oNXFxsgX3Goy7KRL71mTxjQlw5KdC45hSOYMFcZ8LXVyGK9KldCUYg+OUawCNru+e+glVT3p0fjV/R3LRSEe551+9jsUPXii7gGiKBx0Ivr+00y1wqI0EWy0oWMGlTSfBmE2pw+K+Yfia2CXUVNak8uFRilEcJQVoVj65opM00PsDeiX/HXHNkN4j72AU7uspP5bOXmD4osONJqwvLW9hxCLBNE/ycWL06Wiu4="
+  file_glob: true
+  file: llvm-*.tar.xz
+  skip_cleanup: true
+  on:
+    tags: true
+
+notifications:
+  email: false
