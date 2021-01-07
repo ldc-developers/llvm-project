@@ -1,6 +1,6 @@
 variables:
   # Version of clang host compiler.
-  CLANG_VERSION: 10.0.1
+  CLANG_VERSION: 11.0.0
   LLVM_PROJECTS_TO_ENABLE: compiler-rt;lld;mlir
   LLVM_TARGETS_TO_BUILD: AArch64;AMDGPU;ARM;Mips;MSP430;NVPTX;PowerPC;RISCV;WebAssembly;X86
   LLVM_EXPERIMENTAL_TARGETS_TO_BUILD: AVR
@@ -19,7 +19,6 @@ jobs:
   pool:
     vmImage: 'windows-2019'
   variables:
-    CLANG_VERSION: 10.0.0
     VSINSTALLDIR: C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\
     EXTRA_CMAKE_FLAGS: -DLLVM_USE_CRT_RELEASE=MT
   strategy:
@@ -59,6 +58,8 @@ jobs:
     ARCH: x86_64
     # To improve portability of the generated binaries, link the C++ standard library statically.
     EXTRA_CMAKE_FLAGS: -DLLVM_BINUTILS_INCDIR=/usr/include -DLLVM_STATIC_LINK_CXX_STDLIB=ON
+    # Official clang 11.0.0 was available for Ubuntu 16.04, but isn't anymore...
+    CLANG_VERSION: 10.0.1
   strategy:
     matrix:
       x64:
