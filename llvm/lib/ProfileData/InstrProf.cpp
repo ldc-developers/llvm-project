@@ -448,8 +448,13 @@ GlobalVariable *createPGOFuncNameVar(Module &M,
   else if (Linkage == GlobalValue::AvailableExternallyLinkage)
     Linkage = GlobalValue::LinkOnceODRLinkage;
   else if (Linkage == GlobalValue::InternalLinkage ||
-           Linkage == GlobalValue::ExternalLinkage)
-    Linkage = GlobalValue::PrivateLinkage;
+           Linkage == GlobalValue::ExternalLinkage) {
+    // LDC: use internal instead of private linkage for COFF (still local, but
+    //      allows for COMDATs on Windows)
+    Linkage = Triple(M.getTargetTriple()).isOSBinFormatCOFF()
+                  ? GlobalValue::InternalLinkage
+                  : GlobalValue::PrivateLinkage;
+  }
 
   auto *Value =
       ConstantDataArray::getString(M.getContext(), PGOFuncName, false);
