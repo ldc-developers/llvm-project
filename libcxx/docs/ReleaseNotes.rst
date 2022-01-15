@@ -1,5 +1,5 @@
 =========================================
-Libc++ 13.0.0 (In-Progress) Release Notes
+Libc++ 13.0.0 Release Notes
 =========================================
 
 .. contents::
@@ -7,12 +7,6 @@ Libc++ 13.0.0 (In-Progress) Release Notes
    :depth: 2
 
 Written by the `Libc++ Team <https://libcxx.llvm.org>`_
-
-.. warning::
-
-   These are in-progress notes for the upcoming libc++ 13 release.
-   Release notes for previous releases can be found on
-   `the Download Page <https://releases.llvm.org/download.html>`_.
 
 Introduction
 ============
@@ -67,8 +61,8 @@ New Features
 - The documentation conversion from html to restructured text has been
   completed.
 
-API Changes
------------
+API and ABI Changes
+-------------------
 
 - There has been several changes in the tuple constructors provided by libc++.
   Those changes were made as part of an effort to regularize libc++'s tuple
@@ -101,3 +95,10 @@ API Changes
 
 - The ``std::result_of`` and ``std::is_literal_type`` type traits have been removed in
   C++20 mode.
+
+- The C++20 type ``std::counted_semaphore<N>`` is now based on ``std::atomic``
+  on all platforms, and does not use "native" semaphores such as pthreads
+  ``sem_t`` even on platforms that would support them. This changes the layout
+  of ``counted_semaphore<N>`` notably on Linux, so it is an ABI break on that
+  platform. This change is needed to conform to the Standard, which requires
+  ``counted_semaphore``'s constructor to be constexpr.
