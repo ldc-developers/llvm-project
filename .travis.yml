@@ -5,7 +5,7 @@ language: cpp
 
 env:
   global:
-    - CLANG_VERSION: 14.0.0
+    - CLANG_VERSION: 14.0.3
     # no MLIR, it increases compile times dangerously for 50 min timeout
     - LLVM_PROJECTS_TO_ENABLE: '"bolt;compiler-rt;lld"'
     # keep these in sync with azure-pipelines.yml for Linux x64:
@@ -33,7 +33,7 @@ script:
   - nproc
   - free
   # Install a more recent version of CMake
-  - curl --max-time 300 --retry 3 -L -o cmake.tar.gz https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-aarch64.tar.gz
+  - curl --max-time 300 --retry 3 -L -o cmake.tar.gz https://github.com/Kitware/CMake/releases/download/v3.23.1/cmake-3.23.1-linux-aarch64.tar.gz
   - mkdir cmake_bin
   - tar -xf cmake.tar.gz --strip 1 -C cmake_bin
   - export PATH="$PWD/cmake_bin/bin:$PATH"
@@ -44,6 +44,8 @@ script:
   - rm clang.tar.xz
   - export CC="$PWD/clang_bin/bin/clang"
   - export CXX="$PWD/clang_bin/bin/clang++"
+  # Make lld the default linker
+  - sudo ln -sf "$PWD/clang_bin/bin/ld.lld" /usr/bin/ld
   # Build & install LLVM incl. LLD, compiler-rt, BOLT and the Khronos SPIRV-LLVM-Translator
   - cmake --version
   - ninja --version

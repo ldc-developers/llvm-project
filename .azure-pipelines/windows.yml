@@ -25,7 +25,7 @@ steps:
     echo on
     cd ..
     set PATH=C:\Program Files\LLVM\bin;%CD%\ninja;%PATH%
-    call "%VSINSTALLDIR%Common7\Tools\VsDevCmd.bat" -arch=%ARCH%
+    call "%VSINSTALLDIR%VC\Auxiliary\Build\vcvarsall.bat" %ARCH%
     echo on
     cmake --version
     ninja --version

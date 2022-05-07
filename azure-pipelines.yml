@@ -1,6 +1,6 @@
 variables:
   # Version of clang host compiler.
-  CLANG_VERSION: 14.0.0
+  CLANG_VERSION: 14.0.3
   LLVM_PROJECTS_TO_ENABLE: bolt;compiler-rt;lld;mlir
   LLVM_TARGETS_TO_BUILD: all
   LLVM_EXPERIMENTAL_TARGETS_TO_BUILD: ''
@@ -17,9 +17,9 @@ jobs:
 - job: Windows
   timeoutInMinutes: 240
   pool:
-    vmImage: 'windows-2019'
+    vmImage: 'windows-2022'
   variables:
-    VSINSTALLDIR: C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\
+    VSINSTALLDIR: C:\Program Files\Microsoft Visual Studio\2022\Enterprise\
     # compile errors with MLIR v13.0.0; exclude BOLT (not supported on Windows yet I guess)
     LLVM_PROJECTS_TO_ENABLE: compiler-rt;lld
     EXTRA_CMAKE_FLAGS: -DLLVM_USE_CRT_RELEASE=MT
@@ -58,6 +58,7 @@ jobs:
   variables:
     CI_OS: linux
     ARCH: x86_64
+    CLANG_VERSION: 14.0.0 # no prebuilt patch versions available
     # To improve portability of the generated binaries, link the C++ standard library statically.
     EXTRA_CMAKE_FLAGS: -DLLVM_BINUTILS_INCDIR=/usr/include -DLLVM_STATIC_LINK_CXX_STDLIB=ON
   strategy:
@@ -85,6 +86,8 @@ jobs:
         set +x
         echo "##vso[task.setvariable variable=CC]$PWD/clang/bin/clang"
         echo "##vso[task.setvariable variable=CXX]$PWD/clang/bin/clang++"
+        # Make lld the default linker
+        sudo ln -sf "$PWD/clang/bin/ld.lld" /usr/bin/ld
       displayName: Install prerequisites
     - template: .azure-pipelines/posix.yml
 
