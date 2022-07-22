@@ -1,0 +1,93 @@
+name: Create package & upload artifact(s)
+inputs:
+  arch:
+    required: true
+  os:
+    required: false
+    default: '' # native
+  with_asserts:
+    required: true
+runs:
+  using: composite
+  steps:
+
+    - name: Pack installation dir
+      shell: bash
+      run: |
+        set -euxo pipefail
+        cd ..
+        mkdir artifacts
+
+        if [[ '${{ github.ref }}' = refs/tags/ldc-v* ]]; then
+          artifactID='${{ github.ref }}'
+          artifactID="${artifactID:15}"
+        else
+          artifactID='${{ github.sha }}'
+          artifactID="${artifactID:0:8}"
+        fi
+
+        os='${{ inputs.os }}'
+        if [[ "$os" == '' ]]; then
+          if [[ '${{ runner.os }}' == Linux ]]; then
+            os=linux
+          elif [[ '${{ runner.os }}' == macOS ]]; then
+            os=osx
+          elif [[ '${{ runner.os }}' == Windows ]]; then
+            os=windows
+          else
+            echo "Error: unknown OS '${{ runner.os }}'"
+            exit 1
+          fi
+        fi
+
+        if [[ "$os" == windows ]]; then
+          # on Windows, the lld symlinks are copies
+          rm install/bin/{ld.lld,ld64.lld*,lld-link,wasm-ld}.exe
+          mv install/bin/lld.exe install/bin/lld-link.exe
+        fi
+
+        assertsSuffix="${{ inputs.with_asserts == 'true' && '-withAsserts' || '' }}"
+
+        artifactName="llvm-$artifactID-$os-${{ inputs.arch }}$assertsSuffix"
+        mv install $artifactName
+        if [[ '${{ runner.os }}' == Windows ]]; then
+          cd $artifactName
+          7z a -mx=9 ../artifacts/$artifactName.7z * >/dev/null
+          cd ..
+        else
+          chmod -R go=rX $artifactName
+          if [[ '${{ runner.os }}' == macOS ]]; then
+            sudo chown -R root:wheel $artifactName
+            tar -cJf artifacts/$artifactName.tar.xz --options='compression-level=9' $artifactName
+          else
+            tar -cf - --owner=0 --group=0 $artifactName | 7za a artifacts/$artifactName.tar.xz -si -txz -mx9
+          fi
+        fi
+
+        # export ARTIFACT_{ID,NAME}
+        echo "ARTIFACT_ID=$artifactID" >> $GITHUB_ENV
+        echo "ARTIFACT_NAME=$os-${{ inputs.arch }}$assertsSuffix" >> $GITHUB_ENV
+
+    - name: 'Linux: Pack source dir'
+      if: runner.os == 'Linux' && inputs.os == '' && inputs.with_asserts == 'false'
+      shell: bash
+      run: |
+        set -eux
+        git clean -dffx
+        git submodule foreach git clean -dffx
+        artifactName="llvm-$ARTIFACT_ID.src"
+        # just the LLVM src dir (already incl. LLVM-SPIRV-Translator) + compiler-rt + lld + mlir
+        mv compiler-rt mlir llvm/projects
+        mv lld llvm/tools
+        chmod -R go=rX llvm
+        tar -cf - --exclude-vcs --owner=0 --group=0 --transform="s,^llvm,$artifactName," llvm | 7za a ../artifacts/$artifactName.tar.xz -si -txz -mx9
+
+    - name: 'Move artifacts dir for uploading'
+      shell: bash
+      run: mv ../artifacts ./
+
+    - name: Upload artifact(s)
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ env.ARTIFACT_NAME }}
+        path: artifacts/

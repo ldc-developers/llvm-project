@@ -8,7 +8,7 @@ env:
     - CLANG_VERSION: 14.0.3
     # no MLIR, it increases compile times dangerously for 50 min timeout
     - LLVM_PROJECTS_TO_ENABLE: '"bolt;compiler-rt;lld"'
-    # keep these in sync with azure-pipelines.yml for Linux x64:
+    # keep these in sync with .github/workflows/ldc-release.yml for Linux x64:
     - LLVM_TARGETS_TO_BUILD: all
     - BASE_CMAKE_FLAGS: '"-DLLVM_ENABLE_UNWIND_TABLES=OFF -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DCOMPILER_RT_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_TESTS=OFF -DCOMPILER_RT_USE_LIBCXX=OFF"'
     - EXTRA_CMAKE_FLAGS: '"-DLLVM_BINUTILS_INCDIR=/usr/include -DLLVM_STATIC_LINK_CXX_STDLIB=ON"'

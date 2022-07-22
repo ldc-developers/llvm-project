@@ -1,0 +1,75 @@
+name: Install prerequisites
+inputs:
+  clang_version:
+    required: true
+  arch:
+    required: true
+runs:
+  using: composite
+  steps:
+
+    - name: 'Linux: Install required apt packages'
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -eux
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get -q update
+        sudo apt-get -yq install \
+          git-core cmake g++ binutils-dev python p7zip-full unzip
+
+    - name: 'Linux: Download & extract clang' # into ../clang
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        set -eux
+        cd ..
+        # no patch versions available for download, use vX.Y.0
+        version='${{ inputs.clang_version }}'
+        version="${version:0:-1}0"
+        curl -fL --retry 3 --max-time 300 -o clang.tar.xz \
+          https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/clang+llvm-$version-x86_64-linux-gnu-ubuntu-18.04.tar.xz
+        mkdir clang
+        tar -xf clang.tar.xz --strip 1 -C clang
+        rm clang.tar.xz
+        clang/bin/clang --version
+
+        # use it as C(++) compiler for future steps
+        echo "CC=$PWD/clang/bin/clang" >> $GITHUB_ENV
+        echo "CXX=$PWD/clang/bin/clang++" >> $GITHUB_ENV
+
+        # make bundled lld the default linker
+        sudo ln -sf "$PWD/clang/bin/ld.lld" /usr/bin/ld
+        ld --version
+    - name: 'Windows: Install clang'
+      if: runner.os == 'Windows'
+      shell: bash
+      run: |
+        set -eux
+        cd ..
+        curl -fL --retry 3 --max-time 300 -o clang.exe \
+          https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ inputs.clang_version }}/LLVM-${{ inputs.clang_version }}-win64.exe
+        ./clang.exe //S # double-slash for bash
+        rm clang.exe
+
+        # C:\Program Files\LLVM\bin should already be in PATH
+        clang-cl --version
+
+        # use it as C(++) compiler for future steps
+        echo "CC=clang-cl" >> $GITHUB_ENV
+        echo "CXX=clang-cl" >> $GITHUB_ENV
+
+        if [[ '${{ inputs.arch }}' == x86 ]]; then
+          # make CMake configure 64-bit clang-cl for 32-bit code emission
+          echo "CFLAGS=-m32" >> $GITHUB_ENV
+          echo "CXXFLAGS=-m32" >> $GITHUB_ENV
+          echo "ASMFLAGS=-m32" >> $GITHUB_ENV
+        fi
+
+    - name: Install ninja
+      uses: seanmiddleditch/gha-setup-ninja@v3
+
+    - name: 'Windows: Set LDC_VSDIR env variable'
+      if: runner.os == 'Windows'
+      shell: bash
+      run: echo "LDC_VSDIR=$(vswhere -latest -property installationPath)" >> $GITHUB_ENV
