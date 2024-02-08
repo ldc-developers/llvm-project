@@ -65,7 +65,7 @@ runs:
         fi
 
     - name: Install ninja
-      uses: seanmiddleditch/gha-setup-ninja@v3
+      uses: seanmiddleditch/gha-setup-ninja@v4
 
     - name: 'Windows: Set LDC_VSDIR env variable'
       if: runner.os == 'Windows'

@@ -52,6 +52,14 @@ jobs:
             os: ubuntu-20.04
             arch: x86_64
             with_asserts: true
+          - job_name: macOS arm64
+            os: macos-14
+            arch: arm64
+            with_asserts: false
+          - job_name: macOS arm64 withAsserts
+            os: macos-14
+            arch: arm64
+            with_asserts: true
           - job_name: macOS x86_64
             os: macos-11
             arch: x86_64
@@ -64,7 +72,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 240
     env:
-      MACOSX_DEPLOYMENT_TARGET: 10.12 # min version for BOLT
+      # 10.12 is the min version for BOLT
+      MACOSX_DEPLOYMENT_TARGET: ${{ matrix.arch == 'arm64' && '11.0' || '10.12' }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -104,19 +113,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - job_name: macOS arm64
-            host_os: macos-11
-            os: osx
-            arch: arm64
-            targets_to_build: all
-            experimental_targets_to_build: SPIRV
-          - job_name: macOS arm64 withAsserts
-            host_os: macos-11
-            os: osx
-            arch: arm64
-            targets_to_build: all
-            experimental_targets_to_build: SPIRV
-            with_asserts: true
           - job_name: Android armv7a
             host_os: ubuntu-20.04
             os: android
@@ -134,7 +130,6 @@ jobs:
     timeout-minutes: 240
     env:
       ANDROID_NDK_VERSION: r21e
-      MACOSX_DEPLOYMENT_TARGET: 11.0
     steps:
       - uses: actions/checkout@v3
         with:
@@ -164,14 +159,7 @@ jobs:
           set -eux
           os='${{ matrix.os }}'
           arch='${{ matrix.arch }}'
-          if [[ "$os-$arch" == osx-arm64 ]]; then
-            flags=(
-              -DCMAKE_OSX_ARCHITECTURES=arm64
-              -DLLVM_TARGET_ARCH=AArch64
-              -DLLVM_DEFAULT_TARGET_TRIPLE=arm64-apple-macos
-              -DLLVM_ENABLE_PLUGINS=OFF
-            )
-          elif [[ "$os" == android ]]; then
+          if [[ "$os" == android ]]; then
             # download & extract Android NDK
             cd ..
             curl -fL --retry 3 --max-time 300 -o android-ndk.zip \
@@ -222,8 +210,6 @@ jobs:
             -DLLVM_TABLEGEN="${{ github.workspace }}/../build-native/bin/llvm-tblgen"
             -DLLVM_CONFIG_PATH="${{ github.workspace }}/../build-native/bin/llvm-config"
             ${{ env.EXTRA_CMAKE_FLAGS_CROSS }}
-            ${{ matrix.os == 'osx' && '-DLLVM_ENABLE_ZSTD=OFF' || '' }}
-          # ^^ the macOS arm64 CI jobs otherwise attempt to link against an x86_64 libzstd.dylib (and fail)
       - name: Create package & upload artifact
         uses: ./.github/actions/3-package
         with:
