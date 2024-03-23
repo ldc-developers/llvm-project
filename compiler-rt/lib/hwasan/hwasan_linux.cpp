@@ -26,6 +26,12 @@
 #  include <sys/prctl.h>
 #  include <sys/resource.h>
 #  include <sys/time.h>
+#  if defined(__ANDROID__)
+#    // SSIZE_MAX required by unistd.h; somehow including limits.h explicitly doesn't work either
+#    if !defined(SSIZE_MAX) && defined(__LP64__)
+#      define SSIZE_MAX 0x7fffffffffffffffL
+#    endif
+#  endif
 #  include <unistd.h>
 #  include <unwind.h>
 
