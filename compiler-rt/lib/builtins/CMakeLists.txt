@@ -568,6 +568,11 @@ elseif(NOT WIN32)
   )
 endif()
 
+if (ANDROID)
+  # FIXME: clear_cache.c:87:20: error: write to reserved register 'R7'
+  list(REMOVE_ITEM arm_SOURCES clear_cache.c)
+endif()
+
 set(aarch64_SOURCES
   ${GENERIC_TF_SOURCES}
   ${GENERIC_SOURCES}
