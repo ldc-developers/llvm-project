@@ -86,7 +86,7 @@ jobs:
         uses: ./.github/actions/1-setup
         with:
           # on Windows, the MSVC headers require clang 16+
-          clang_version: ${{ runner.os == 'Windows' && '18.1.3' || env.CLANG_VERSION }}
+          clang_version: ${{ runner.os == 'Windows' && '18.1.5' || env.CLANG_VERSION }}
           arch: ${{ matrix.arch }}
       # BOLT supports ELF binaries only, so include it for Linux packages only
       - name: Build & install LLVM incl. LLD, compiler-rt${{ runner.os == 'Linux' && ', BOLT' || '' }}
