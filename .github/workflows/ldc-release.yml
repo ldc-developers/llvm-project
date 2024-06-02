@@ -75,18 +75,15 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.arch == 'arm64' && '11.0' || '10.12' }}
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-          fetch-depth: 50
-      - name: 'macOS 14: Switch to Xcode v15.3'
+      - uses: actions/checkout@v4
+      - name: 'macOS 14: Switch to Xcode v15.4'
         if: matrix.os == 'macos-14'
-        run: sudo xcode-select -switch /Applications/Xcode_15.3.app
+        run: sudo xcode-select -switch /Applications/Xcode_15.4.app
       - name: Install prerequisites
         uses: ./.github/actions/1-setup
         with:
           # on Windows, the MSVC headers require clang 16+
-          clang_version: ${{ runner.os == 'Windows' && '18.1.5' || env.CLANG_VERSION }}
+          clang_version: ${{ runner.os == 'Windows' && '18.1.6' || env.CLANG_VERSION }}
           arch: ${{ matrix.arch }}
       # BOLT supports ELF binaries only, so include it for Linux packages only
       - name: Build & install LLVM incl. LLD, compiler-rt${{ runner.os == 'Linux' && ', BOLT' || '' }}
@@ -135,10 +132,7 @@ jobs:
     env:
       ANDROID_NDK_VERSION: r26d
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-          fetch-depth: 50
+      - uses: actions/checkout@v4
       - name: Install prerequisites
         uses: ./.github/actions/1-setup
         with:
@@ -232,6 +226,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Upload all artifacts to GitHub release
         uses: ./.github/actions/upload-to-github
