@@ -58,9 +58,9 @@ runs:
           chmod -R go=rX $artifactName
           if [[ '${{ runner.os }}' == macOS ]]; then
             sudo chown -R root:wheel $artifactName
-            tar -cf - $artifactName | 7za a artifacts/$artifactName.tar.xz -si -txz -mx9
+            tar -cf - $artifactName | 7za a artifacts/$artifactName.tar.xz -si -txz -mx9 -mmt$(sysctl -n hw.logicalcpu)
           else
-            tar -cf - --owner=0 --group=0 $artifactName | 7za a artifacts/$artifactName.tar.xz -si -txz -mx9
+            tar -cf - --owner=0 --group=0 $artifactName | 7za a artifacts/$artifactName.tar.xz -si -txz -mx9 -mmt$(nproc)
           fi
         fi
 
@@ -74,13 +74,14 @@ runs:
       run: |
         set -euxo pipefail
         git clean -dffx
-        git submodule foreach git clean -dffx
         artifactName="llvm-$ARTIFACT_ID.src"
-        # just the LLVM src dir + bolt + compiler-rt + lld
-        mv compiler-rt llvm/projects
-        mv bolt lld llvm/tools
-        chmod -R go=rX llvm
-        tar -cf - --exclude-vcs --owner=0 --group=0 --transform="s,^llvm,$artifactName," llvm | 7za a ../artifacts/$artifactName.tar.xz -si -txz -mx9
+        mkdir $artifactName
+        # only keep some subdirs (note: libunwind required by lld, for `mach-o/compact_unwind_encoding.h` include)
+        for dir in bolt cmake compiler-rt libunwind lld llvm; do
+          mv $dir $artifactName/
+        done
+        chmod -R go=rX $artifactName
+        tar -cf - --exclude-vcs --owner=0 --group=0 $artifactName | 7za a ../artifacts/$artifactName.tar.xz -si -txz -mx9 -mmt$(nproc)
 
     - name: 'Move artifacts dir for uploading'
       shell: bash
