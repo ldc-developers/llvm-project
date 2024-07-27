@@ -83,7 +83,7 @@ jobs:
         uses: ./.github/actions/1-setup
         with:
           # on Windows, the MSVC headers require clang 16+
-          clang_version: ${{ runner.os == 'Windows' && '18.1.6' || env.CLANG_VERSION }}
+          clang_version: ${{ runner.os == 'Windows' && '18.1.8' || env.CLANG_VERSION }}
           arch: ${{ matrix.arch }}
       # BOLT supports ELF binaries only, so include it for Linux packages only
       - name: Build & install LLVM incl. LLD, compiler-rt${{ runner.os == 'Linux' && ', BOLT' || '' }}
@@ -130,7 +130,7 @@ jobs:
     runs-on: ${{ matrix.host_os }}
     timeout-minutes: 240
     env:
-      ANDROID_NDK_VERSION: r26d
+      ANDROID_NDK_VERSION: r27
     steps:
       - uses: actions/checkout@v4
       - name: Install prerequisites
