@@ -92,7 +92,7 @@ jobs:
           arch: ${{ matrix.arch }}
           enable_projects: compiler-rt;lld${{ runner.os == 'Linux' && ';bolt' || '' }}
           targets_to_build: all
-          experimental_targets_to_build: SPIRV
+          experimental_targets_to_build: SPIRV;Xtensa
           with_asserts: ${{ matrix.with_asserts }}
           # - link C++ standard library statically for improved portability on Windows and Linux
           # - on Windows, avoid wrongly detected libxml2 on GHA runner
