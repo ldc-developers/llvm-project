@@ -54,19 +54,19 @@ jobs:
             arch: x86_64
             with_asserts: true
           - job_name: macOS arm64
-            os: macos-14
+            os: macos-15
             arch: arm64
             with_asserts: false
           - job_name: macOS arm64 withAsserts
-            os: macos-14
+            os: macos-15
             arch: arm64
             with_asserts: true
           - job_name: macOS x86_64
-            os: macos-12
+            os: macos-13
             arch: x86_64
             with_asserts: false
           - job_name: macOS x86_64 withAsserts
-            os: macos-12
+            os: macos-13
             arch: x86_64
             with_asserts: true
     name: ${{ matrix.job_name }}
@@ -76,9 +76,6 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.arch == 'arm64' && '11.0' || '10.12' }}
     steps:
       - uses: actions/checkout@v4
-      - name: 'macOS 14: Switch to Xcode 16'
-        if: matrix.os == 'macos-14'
-        run: sudo xcode-select -switch /Applications/Xcode_16.app
       - name: Install prerequisites
         uses: ./.github/actions/1-setup
         with:
