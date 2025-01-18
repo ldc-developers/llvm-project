@@ -13,10 +13,19 @@ runs:
       shell: bash
       run: |
         set -eux
+        cd ..
         export DEBIAN_FRONTEND=noninteractive
         sudo apt-get -q update
-        sudo apt-get -yq install \
-          git-core cmake g++ binutils-dev libzstd-dev python p7zip-full unzip
+        sudo -E apt-get -yq install \
+          git-core curl xz-utils ninja-build g++ python3 pkgconf binutils-dev libxml2-dev libzstd-dev zlib1g-dev p7zip-full unzip
+
+        # install a recent CMake version (Ubuntu 20's too old)
+        curl -fL --retry 3 --max-time 300 -o cmake.tar.gz \
+          https://github.com/Kitware/CMake/releases/download/v3.31.4/cmake-3.31.4-linux-${{ inputs.arch }}.tar.gz
+        mkdir cmake
+        tar -xf cmake.tar.gz --strip 1 -C cmake
+        rm cmake.tar.gz
+        sudo ln -sf $PWD/cmake/bin/cmake /usr/bin/cmake
 
     - name: 'Linux: Download & extract clang' # into ../clang
       if: runner.os == 'Linux'
@@ -25,8 +34,13 @@ runs:
         set -eux
         cd ..
         version='${{ inputs.clang_version }}'
+        arch='${{ inputs.arch }}'
+        extraSuffix=''
+        if [[ $arch == x86_64 ]]; then
+          extraSuffix='-ubuntu-18.04'
+        fi
         curl -fL --retry 3 --max-time 300 -o clang.tar.xz \
-          https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/clang+llvm-$version-x86_64-linux-gnu-ubuntu-18.04.tar.xz
+          https://github.com/llvm/llvm-project/releases/download/llvmorg-$version/clang+llvm-$version-$arch-linux-gnu$extraSuffix.tar.xz
         mkdir clang
         tar -xf clang.tar.xz --strip 1 -C clang
         rm clang.tar.xz
@@ -64,7 +78,8 @@ runs:
           echo "ASMFLAGS=-m32" >> $GITHUB_ENV
         fi
 
-    - name: Install ninja
+    - name: 'Non-Linux: Install ninja'
+      if: runner.os != 'Linux'
       uses: seanmiddleditch/gha-setup-ninja@v4
 
     - name: 'Windows: Set LDC_VSDIR env variable'
