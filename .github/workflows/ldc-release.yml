@@ -11,8 +11,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # no recent official clang packages for Ubuntu 20
-  CLANG_VERSION: 15.0.6
   # Prevent dependencies on some purely optional libraries, and a dependency on clang
   # for compiler-rt tests.
   BASE_CMAKE_FLAGS: >-
@@ -33,22 +31,18 @@ jobs:
             os: windows-2022
             arch: x64
             with_asserts: false
-            clang_version: 19.1.3 # the MSVC headers require clang 16+
           - job_name: Windows x64 withAsserts
             os: windows-2022
             arch: x64
             with_asserts: true
-            clang_version: 19.1.3 # the MSVC headers require clang 16+
           - job_name: Windows x86
             os: windows-2022
             arch: x86
             with_asserts: false
-            clang_version: 19.1.3 # the MSVC headers require clang 16+
           - job_name: Windows x86 withAsserts
             os: windows-2022
             arch: x86
             with_asserts: true
-            clang_version: 19.1.3 # the MSVC headers require clang 16+
           - job_name: Linux x86_64
             os: ubuntu-20.04
             arch: x86_64
@@ -62,13 +56,11 @@ jobs:
             container_image: ubuntu:20.04
             arch: aarch64
             with_asserts: false
-            clang_version: 15.0.3 # 15.0.6 requires a more recent libstdc++.so.6 than shipped with Ubuntu 20
           - job_name: Linux aarch64 withAsserts
             os: ubuntu-22.04-arm # Ubuntu 20 not natively supported
             container_image: ubuntu:20.04
             arch: aarch64
             with_asserts: true
-            clang_version: 15.0.3 # 15.0.6 requires a more recent libstdc++.so.6 than shipped with Ubuntu 20
           - job_name: macOS arm64
             os: macos-15
             arch: arm64
@@ -103,7 +95,6 @@ jobs:
       - name: Install prerequisites
         uses: ./.github/actions/1-setup
         with:
-          clang_version: ${{ matrix.clang_version || env.CLANG_VERSION }}
           arch: ${{ matrix.arch }}
       # BOLT supports ELF binaries only, so include it for Linux packages only
       - name: Build & install LLVM incl. LLD, compiler-rt${{ runner.os == 'Linux' && ', BOLT' || '' }}
@@ -156,7 +147,6 @@ jobs:
       - name: Install prerequisites
         uses: ./.github/actions/1-setup
         with:
-          clang_version: ${{ env.CLANG_VERSION }}
           arch: x86_64
       - name: Build native llvm-tblgen
         shell: bash
