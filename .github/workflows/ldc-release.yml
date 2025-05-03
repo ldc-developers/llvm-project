@@ -15,6 +15,7 @@ env:
   # for compiler-rt tests.
   BASE_CMAKE_FLAGS: >-
     -DLLVM_ENABLE_LIBEDIT=OFF
+    -DLLVM_ENABLE_LIBXML2=OFF
     -DLLVM_USE_STATIC_ZSTD=TRUE
     -DCOMPILER_RT_INCLUDE_TESTS=OFF
     -DLLVM_INCLUDE_TESTS=OFF
@@ -104,12 +105,11 @@ jobs:
           experimental_targets_to_build: Xtensa
           with_asserts: ${{ matrix.with_asserts }}
           # - link C++ standard library statically for improved portability on Windows and Linux
-          # - on Windows, avoid wrongly detected libxml2 on GHA runner
           # - on Linux, need LLVM_BINUTILS_INCDIR to generate LTO linker plugin
           # - on macOS, disable libzstd dependency
           extra_cmake_flags: >-
             ${{ env.BASE_CMAKE_FLAGS }}
-            ${{ runner.os == 'Windows' && '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DLLVM_ENABLE_LIBXML2=OFF' || '' }}
+            ${{ runner.os == 'Windows' && '-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded' || '' }}
             ${{ runner.os == 'Linux' && '-DLLVM_BINUTILS_INCDIR=/usr/include -DLLVM_STATIC_LINK_CXX_STDLIB=ON' || '' }}
             ${{ runner.os == 'macOS' && '-DLLVM_ENABLE_ZSTD=OFF' || '' }}
       - name: Create package & upload artifact

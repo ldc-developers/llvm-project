@@ -15,7 +15,7 @@ runs:
         export DEBIAN_FRONTEND=noninteractive
         sudo apt-get -q update
         sudo -E apt-get -yq install \
-          git-core curl xz-utils g++ python3 pkgconf binutils-dev libxml2-dev libzstd-dev zlib1g-dev p7zip-full unzip \
+          git-core curl xz-utils g++ python3 pkgconf binutils-dev libzstd-dev zlib1g-dev p7zip-full unzip \
           lsb-release wget software-properties-common gnupg # prerequisites of apt.llvm.org install script
 
     - name: 'Linux: Install clang 20 from apt.llvm.org'
