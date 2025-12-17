@@ -67,9 +67,9 @@ runs:
         set -eux
         cd ..
 
-        url='https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.7/LLVM-21.1.7-win64.exe'
+        url='https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/LLVM-21.1.8-win64.exe'
         if [[ '${{ inputs.arch }}' == arm64 ]]; then
-          url='https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.7/LLVM-21.1.7-woa64.exe'
+          url='https://github.com/llvm/llvm-project/releases/download/llvmorg-21.1.8/LLVM-21.1.8-woa64.exe'
         fi
 
         curl -fL --retry 3 --max-time 300 -o clang.exe "$url"
