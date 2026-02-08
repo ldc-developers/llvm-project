@@ -80,8 +80,8 @@ runs:
         clang-cl --version
 
         # use it as C(++) compiler for future steps
-        echo "CC=clang-cl" >> $GITHUB_ENV
-        echo "CXX=clang-cl" >> $GITHUB_ENV
+        echo 'CC=C:\Program Files\LLVM\bin\clang-cl.exe' >> $GITHUB_ENV
+        echo 'CXX=C:\Program Files\LLVM\bin\clang-cl.exe' >> $GITHUB_ENV
 
         if [[ '${{ inputs.arch }}' == x86 ]]; then
           # make CMake configure 64-bit clang-cl for 32-bit code emission
