@@ -58,9 +58,9 @@ runs:
           chmod -R go=rX $artifactName
           if [[ '${{ runner.os }}' == macOS ]]; then
             sudo chown -R root:wheel $artifactName
-            tar -cf - $artifactName | 7za a artifacts/$artifactName.tar.xz -si -txz -mx9 -mmt$(sysctl -n hw.logicalcpu)
+            tar -cf - $artifactName | zstd -T0 --ultra -22 -o artifacts/$artifactName.tar.zst
           else
-            tar -cf - --owner=0 --group=0 $artifactName | 7za a artifacts/$artifactName.tar.xz -si -txz -mx9 -mmt$(nproc)
+            tar -cf - --owner=0 --group=0 $artifactName | zstd -T0 --ultra -22 -o artifacts/$artifactName.tar.zst
           fi
         fi
 
@@ -81,7 +81,7 @@ runs:
           mv $dir $artifactName/
         done
         chmod -R go=rX $artifactName
-        tar -cf - --exclude-vcs --owner=0 --group=0 $artifactName | 7za a ../artifacts/$artifactName.tar.xz -si -txz -mx9 -mmt$(nproc)
+        tar -cf - --exclude-vcs --owner=0 --group=0 $artifactName | zstd -T0 --ultra -22 -o ../artifacts/$artifactName.tar.zst
 
     - name: 'Move artifacts dir for uploading'
       shell: bash
