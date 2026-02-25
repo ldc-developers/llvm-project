@@ -175,7 +175,6 @@ jobs:
             flags=(
               -DCMAKE_TOOLCHAIN_FILE="$PWD/android-ndk/build/cmake/android.toolchain.cmake"
               -DANDROID_USE_LEGACY_TOOLCHAIN_FILE=OFF
-              -DANDROID_NATIVE_API_LEVEL=29
               -DANDROID_STL=c++_static
               -DCMAKE_CROSSCOMPILING=True
               -DLLVM_ENABLE_PLUGINS=OFF
@@ -183,6 +182,7 @@ jobs:
             if [[ "$arch" == armv7a ]]; then
               flags+=(
                 -DANDROID_ABI=armeabi-v7a
+                -DANDROID_NATIVE_API_LEVEL=29
                 -DLLVM_TARGET_ARCH=ARM
                 -DLLVM_DEFAULT_TARGET_TRIPLE=armv7a-none-linux-androideabi29
                 # disable sanitizers and memprof because of:
@@ -193,8 +193,9 @@ jobs:
             elif [[ "$arch" == aarch64 ]]; then
               flags+=(
                 -DANDROID_ABI=arm64-v8a
+                -DANDROID_NATIVE_API_LEVEL=30
                 -DLLVM_TARGET_ARCH=AArch64
-                -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-none-linux-android29
+                -DLLVM_DEFAULT_TARGET_TRIPLE=aarch64-none-linux-android30
                 # work around undefined symbols when linking shared asan/tsan/ubsan libraries:
                 -DCOMPILER_RT_USE_BUILTINS_LIBRARY=ON
                 -DCOMPILER_RT_USE_ATOMIC_LIBRARY=ON
