@@ -172,9 +172,6 @@ jobs:
             mv "android-ndk-$ANDROID_NDK_VERSION" android-ndk
             rm android-ndk.zip
 
-            # remove the implicit -fstack-protector-strong
-            sed -i 's|^  " -fstack-protector-strong"$||' android-ndk/build/cmake/flags.cmake
-
             flags=(
               -DCMAKE_TOOLCHAIN_FILE="$PWD/android-ndk/build/cmake/android.toolchain.cmake"
               -DANDROID_USE_LEGACY_TOOLCHAIN_FILE=OFF
