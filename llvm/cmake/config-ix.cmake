@@ -370,7 +370,7 @@ check_symbol_exists(getauxval sys/auxv.h HAVE_GETAUXVAL)
 # Avoid sigaltstack on Apple platforms, where backtrace() cannot handle it
 # (rdar://7089625) and _Unwind_Backtrace is unusable because it cannot unwind
 # past the signal handler after an assertion failure (rdar://29866587).
-if( NOT LLVM_USE_SANITIZER MATCHES ".*Address.*" AND NOT APPLE AND NOT ANDROID )
+if( NOT LLVM_USE_SANITIZER MATCHES ".*Address.*" AND NOT APPLE )
   check_symbol_exists(sigaltstack signal.h HAVE_SIGALTSTACK)
 endif()
 check_symbol_exists(mallctl malloc_np.h HAVE_MALLCTL)
