@@ -137,7 +137,7 @@ jobs:
     runs-on: ${{ matrix.host_os }}
     timeout-minutes: 240
     env:
-      ANDROID_NDK_VERSION: r27c
+      ANDROID_NDK_VERSION: r29
     steps:
       - uses: actions/checkout@v4
       - name: Install prerequisites
