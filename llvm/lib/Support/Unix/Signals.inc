@@ -293,6 +293,7 @@ static void CreateSigAltStack() {}
 #endif
 
 static void RegisterHandlers() { // Not signal-safe.
+#ifndef __ANDROID__
   // The mutex prevents other threads from registering handlers while we're
   // doing it. We also have to protect the handlers and their count because
   // a signal handler could fire while we're registering handlers.
@@ -341,6 +342,7 @@ static void RegisterHandlers() { // Not signal-safe.
     registerHandler(SIGPIPE, SignalKind::IsKill);
   for (auto S : InfoSigs)
     registerHandler(S, SignalKind::IsInfo);
+#endif
 }
 
 void sys::unregisterHandlers() {
