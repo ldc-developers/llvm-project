@@ -133,6 +133,7 @@ jobs:
             os: android
             arch: aarch64
             targets_to_build: AArch64;ARM;SPIRV;WebAssembly;X86
+            with_asserts: true
     name: ${{ matrix.job_name }}
     runs-on: ${{ matrix.host_os }}
     timeout-minutes: 240
