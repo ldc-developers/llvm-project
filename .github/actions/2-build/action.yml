@@ -36,7 +36,7 @@ runs:
           -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD="${{ inputs.experimental_targets_to_build }}" \
           -DLLVM_ENABLE_ASSERTIONS=${{ inputs.with_asserts == 'true' && 'ON' || 'OFF' }} \
           ${{ inputs.extra_cmake_flags }}
-        ninja install
+        ninja -v install
 
     # Windows: invoke CMake & ninja in MSVC env
     - if: runner.os == 'Windows'
