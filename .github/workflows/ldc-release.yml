@@ -181,6 +181,7 @@ jobs:
               -DANDROID_STL=c++_static
               -DCMAKE_CROSSCOMPILING=True
               -DLLVM_ENABLE_PLUGINS=OFF
+              -DLLVM_ENABLE_BACKTRACES=OFF
             )
             if [[ "$arch" == armv7a ]]; then
               flags+=(
