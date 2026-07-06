@@ -72,7 +72,7 @@ runs:
         set -eux
         cd ..
 
-        version='${{ inputs.clang_major }}.1.2'
+        version='${{ inputs.clang_major }}.1.8'
         suffix='win64'
         if [[ '${{ inputs.arch }}' == arm64 ]]; then
           suffix='woa64'
