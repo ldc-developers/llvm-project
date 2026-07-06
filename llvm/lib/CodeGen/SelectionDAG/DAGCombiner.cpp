@@ -23117,6 +23117,19 @@ static SDValue foldToMaskedStore(StoreSDNode *Store, SelectionDAG &DAG,
   if (LoadPos == 1)
     Mask = DAG.getNOT(Dl, Mask, Mask.getValueType());
 
+  // A masked store follows the IR convention of a vXi1 mask (one bit per
+  // element). A vselect condition may instead be a wider boolean vector, e.g.
+  // a vXi32/vXi64 comparison result produced on AVX512 targets without VLX.
+  // When the matching vXi1 type is legal, narrow the mask to it so that targets
+  // expecting a vXi1 mask lower it correctly. Targets where vXi1 is illegal
+  // (e.g. AVX/AVX2) keep the wide mask and lower it as a blend/vmaskmov.
+  EVT MaskVT = Mask.getValueType();
+  if (MaskVT.getVectorElementType() != MVT::i1) {
+    EVT BoolVT = MaskVT.changeVectorElementType(*DAG.getContext(), MVT::i1);
+    if (TLI.isTypeLegal(BoolVT))
+      Mask = DAG.getNode(ISD::TRUNCATE, Dl, BoolVT, Mask);
+  }
+
   return DAG.getMaskedStore(Store->getChain(), Dl, OtherVec, StorePtr,
                             StoreOffset, Mask, VT, Store->getMemOperand(),
                             Store->getAddressingMode());
@@ -26068,9 +26081,11 @@ SDValue DAGCombiner::visitCONCAT_VECTORS(SDNode *N) {
       // If the bitcast type isn't legal, it might be a trunc of a legal type;
       // look through the trunc so we can still do the transform:
       //   concat_vectors(trunc(scalar), undef) -> scalar_to_vector(scalar)
+      // However, this is only equivalent on little-endian targets.
       if (Scalar->getOpcode() == ISD::TRUNCATE &&
           !TLI.isTypeLegal(Scalar.getValueType()) &&
-          TLI.isTypeLegal(Scalar->getOperand(0).getValueType()))
+          TLI.isTypeLegal(Scalar->getOperand(0).getValueType()) &&
+          DAG.getDataLayout().isLittleEndian())
         Scalar = Scalar->getOperand(0);
 
       EVT SclTy = Scalar.getValueType();

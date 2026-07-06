@@ -381,6 +381,10 @@ public:
     return true;
   }
 
+  bool TraverseCXXThisExpr(CXXThisExpr *E) {
+    return inherited::TraverseType(E->getType());
+  }
+
   bool TraverseTypeLoc(TypeLoc TL, bool TraverseQualifier = true) {
     // We don't care about TypeLocs. So traverse Types instead.
     return TraverseType(TL.getType().getCanonicalType(), TraverseQualifier);
@@ -392,6 +396,16 @@ public:
     // FIXME: Add an assert to catch cases where we failed to profile the
     // concept.
     return true;
+  }
+
+  bool TraverseUnresolvedUsingType(UnresolvedUsingType *T,
+                                   bool TraverseQualifier) {
+    // Sometimes the written type doesn't contain a qualifier which contains
+    // necessary template arguments, whereas the declaration does.
+    if (NestedNameSpecifier NNS = T->getDecl()->getQualifier();
+        TraverseQualifier && NNS)
+      return inherited::TraverseNestedNameSpecifier(NNS);
+    return inherited::TraverseUnresolvedUsingType(T, TraverseQualifier);
   }
 
   bool TraverseInjectedClassNameType(InjectedClassNameType *T,
@@ -478,6 +492,12 @@ class ConstraintSatisfactionChecker {
   bool BuildExpression;
 
 private:
+  template <class Constraint>
+  UnsignedOrNone getOuterPackIndex(const Constraint &C) const {
+    return C.getPackSubstitutionIndex() ? C.getPackSubstitutionIndex()
+                                        : PackSubstitutionIndex;
+  }
+
   ExprResult
   EvaluateAtomicConstraint(const Expr *AtomicExpr,
                            const MultiLevelTemplateArgumentList &MLTAL);
@@ -640,10 +660,7 @@ ConstraintSatisfactionChecker::SubstitutionInTemplateArguments(
     return std::nullopt;
 
   TemplateArgumentListInfo SubstArgs;
-  Sema::ArgPackSubstIndexRAII SubstIndex(
-      S, Constraint.getPackSubstitutionIndex()
-             ? Constraint.getPackSubstitutionIndex()
-             : PackSubstitutionIndex);
+  Sema::ArgPackSubstIndexRAII SubstIndex(S, getOuterPackIndex(Constraint));
 
   if (S.SubstTemplateArgumentsInParameterMapping(
           Constraint.getParameterMapping(), Constraint.getBeginLoc(), MLTAL,
@@ -770,10 +787,7 @@ ExprResult ConstraintSatisfactionChecker::Evaluate(
 
   unsigned Size = Satisfaction.Details.size();
   llvm::FoldingSetNodeID ID;
-  UnsignedOrNone OuterPackSubstIndex =
-      Constraint.getPackSubstitutionIndex()
-          ? Constraint.getPackSubstitutionIndex()
-          : PackSubstitutionIndex;
+  UnsignedOrNone OuterPackSubstIndex = getOuterPackIndex(Constraint);
 
   ID.AddPointer(Constraint.getConstraintExpr());
   ID.AddInteger(OuterPackSubstIndex.toInternalRepresentation());
@@ -869,8 +883,8 @@ ExprResult ConstraintSatisfactionChecker::EvaluateSlow(
                                       UnsignedOrNone(I), Satisfaction,
                                       /*BuildExpression=*/false)
             .Evaluate(Constraint.getNormalizedPattern(), *SubstitutedArgs);
-    if (BuildExpression && Expr.isUsable()) {
-      if (Out.isUnset())
+    if (BuildExpression) {
+      if (Out.isUnset() || !Expr.isUsable())
         Out = Expr;
       else
         Out = BinaryOperator::Create(S.Context, Out.get(), Expr.get(),
@@ -879,8 +893,6 @@ ExprResult ConstraintSatisfactionChecker::EvaluateSlow(
                                      S.Context.BoolTy, VK_PRValue, OK_Ordinary,
                                      Constraint.getBeginLoc(),
                                      FPOptionsOverride{});
-    } else {
-      assert(!BuildExpression || !Satisfaction.IsSatisfied);
     }
     if (!Conjunction && Satisfaction.IsSatisfied) {
       Satisfaction.Details.erase(Satisfaction.Details.begin() +
@@ -943,10 +955,7 @@ ExprResult ConstraintSatisfactionChecker::EvaluateSlow(
     return ExprError();
   }
 
-  Sema::ArgPackSubstIndexRAII SubstIndex(
-      S, Constraint.getPackSubstitutionIndex()
-             ? Constraint.getPackSubstitutionIndex()
-             : PackSubstitutionIndex);
+  Sema::ArgPackSubstIndexRAII SubstIndex(S, getOuterPackIndex(Constraint));
 
   const ASTTemplateArgumentListInfo *Ori =
       ConceptId->getTemplateArgsAsWritten();
@@ -1006,12 +1015,6 @@ ExprResult ConstraintSatisfactionChecker::Evaluate(
     const MultiLevelTemplateArgumentList &MLTAL) {
 
   const ConceptReference *ConceptId = Constraint.getConceptId();
-
-  UnsignedOrNone OuterPackSubstIndex =
-      Constraint.getPackSubstitutionIndex()
-          ? Constraint.getPackSubstitutionIndex()
-          : PackSubstitutionIndex;
-
   Sema::InstantiatingTemplate InstTemplate(
       S, ConceptId->getBeginLoc(),
       Sema::InstantiatingTemplate::ConstraintsCheck{},
@@ -1042,6 +1045,7 @@ ExprResult ConstraintSatisfactionChecker::Evaluate(
   if (Satisfaction.IsSatisfied)
     return E;
 
+  UnsignedOrNone OuterPackSubstIndex = getOuterPackIndex(Constraint);
   llvm::FoldingSetNodeID ID;
   ID.AddPointer(Constraint.getConceptId());
   ID.AddInteger(OuterPackSubstIndex.toInternalRepresentation());
@@ -2549,7 +2553,15 @@ bool Sema::IsAtLeastAsConstrained(const NamedDecl *D1,
   }
 
   SubsumptionChecker SC(*this);
-  std::optional<bool> Subsumes = SC.Subsumes(D1, AC1, D2, AC2);
+  // Associated declarations are used as a cache key in the event they were
+  // normalized earlier during concept checking. However we cannot reuse these
+  // cached results if any of the template depths have been adjusted.
+  const NamedDecl *DeclAC1 = D1, *DeclAC2 = D2;
+  if (Depth2 > Depth1)
+    DeclAC1 = nullptr;
+  else if (Depth1 > Depth2)
+    DeclAC2 = nullptr;
+  std::optional<bool> Subsumes = SC.Subsumes(DeclAC1, AC1, DeclAC2, AC2);
   if (!Subsumes) {
     // Normalization failed
     return true;
